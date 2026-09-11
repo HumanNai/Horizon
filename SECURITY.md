@@ -21,7 +21,7 @@ Security patches and updates are applied to the latest release of Horizon PM:
 
 If you believe you have found a security vulnerability in Horizon PM, please disclose it responsibly via email to:
 
-📧 **security@horizon-pm.org**
+📧 **horizon@humannai.in**
 
 ### What to Include in Your Report
 To help us triage and resolve the issue quickly, please include:
