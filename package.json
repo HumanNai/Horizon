@@ -1,0 +1,79 @@
+{
+  "name": "horizon-pm",
+  "version": "1.0.0",
+  "description": "Horizon — Offline-first, multi-cloud enterprise Product Management desktop application",
+  "license": "Apache-2.0",
+  "author": "Hemanta Mahanta <horizon@humannai.in>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HumanNai/Horizon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HumanNai/Horizon/issues"
+  },
+  "homepage": "https://github.com/HumanNai/Horizon#readme",
+  "keywords": [
+    "product-management",
+    "electron",
+    "react",
+    "sqlite",
+    "offline-first",
+    "cloud-sync",
+    "mongodb",
+    "azure-keyvault",
+    "google-drive",
+    "onedrive",
+    "sharepoint",
+    "cryptography"
+  ],
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "node run.js --dev",
+    "start": "electron-vite build && node run.js",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "lint": "eslint src electron --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.9.2",
+    "axios": "^1.7.2",
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^11.1.2",
+    "electron-squirrel-startup": "^1.0.0",
+    "lucide-react": "^0.395.0",
+    "mongodb": "^7.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.52.1",
+    "react-router-dom": "^6.23.1",
+    "recharts": "^2.12.7",
+    "uuid": "^11.0.0",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.14.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "eslint": "^8.57.0",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  },
+  "build": {
+    "extends": "./electron-builder.config.js"
+  }
+}

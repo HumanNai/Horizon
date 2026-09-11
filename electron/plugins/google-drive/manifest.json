@@ -1,0 +1,38 @@
+{
+  "id": "google-drive-core",
+  "name": "Google Drive Core",
+  "description": "Personal (@gmail.com) and Google Workspace cloud drive storage for specifications, document attachments, and cross-device data synchronization.",
+  "version": "1.0.0",
+  "icon": "google-drive-icon",
+  "fields": [
+    {
+      "key": "clientId",
+      "label": "Client ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "Google Cloud OAuth 2.0 Client ID (e.g. 123...apps.googleusercontent.com)"
+    },
+    {
+      "key": "clientSecret",
+      "label": "Client Secret",
+      "type": "password",
+      "required": false,
+      "placeholder": "Google Cloud OAuth Client Secret (optional/recommended)"
+    },
+    {
+      "key": "folderPath",
+      "label": "Drive Folder Path",
+      "type": "text",
+      "required": false,
+      "placeholder": "/HorizonPM"
+    }
+  ],
+  "scopes": [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "openid"
+  ],
+  "authType": "oauth2"
+}
+

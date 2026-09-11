@@ -1,0 +1,38 @@
+Horizon PM (Product Management Platform)
+Copyright 2024-2026 Horizon Contributors
+
+This product includes software developed by the Horizon PM open source project
+and its contributors (https://github.com/HumanNai/Horizon).
+
+Licensed under the Apache License, Version 2.0 (the License);
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an AS IS BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--------------------------------------------------------------------------------
+Third-Party Software Acknowledgments and Attributions:
+--------------------------------------------------------------------------------
+This project incorporates open-source libraries and components under various
+permissive licenses:
+
+1. Electron (MIT License) - https://github.com/electron/electron
+2. React & React DOM (MIT License) - https://github.com/facebook/react
+3. better-sqlite3 (MIT License) - https://github.com/WiseLibs/better-sqlite3
+4. MongoDB Node.js Driver (Apache License 2.0) - https://github.com/mongodb/node-mongodb-native
+5. Microsoft Authentication Library (MSAL) for Node (MIT License) - https://github.com/AzureAD/microsoft-authentication-library-for-js
+6. Lucide Icons (ISC License) - https://github.com/lucide-icons/lucide
+7. Recharts (MIT License) - https://github.com/recharts/recharts
+8. Tailwind CSS (MIT License) - https://github.com/tailwindlabs/tailwindcss
+9. Vite & Electron-Vite (MIT License) - https://github.com/alex8088/electron-vite
+10. Zustand (MIT License) - https://github.com/pmndrs/zustand
+11. Zod (MIT License) - https://github.com/colinhacks/zod
+12. React Hook Form (MIT License) - https://github.com/react-hook-form/react-hook-form
+13. Axios (MIT License) - https://github.com/axios/axios
+14. bcrypt (MIT License) - https://github.com/kelektiv/node.bcrypt.js

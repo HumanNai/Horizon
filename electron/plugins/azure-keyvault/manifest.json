@@ -1,0 +1,56 @@
+{
+  "id": "azure-keyvault",
+  "name": "Azure Key Vault",
+  "description": "Enterprise cloud secrets management. Securely connect to Microsoft Azure Key Vault to discover, manage, and reveal secrets in your application workspaces.",
+  "version": "1.0.0",
+  "icon": "KeyRound",
+  "authType": "oauth2",
+  "fields": [
+    {
+      "key": "vaultUrl",
+      "label": "Key Vault Name or URL",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. kv-corp-prod or https://kv-corp-prod.vault.azure.net",
+      "hint": "The DNS name or full URL of your Azure Key Vault."
+    },
+    {
+      "key": "tenantId",
+      "label": "Azure Tenant ID (Directory ID)",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47",
+      "hint": "Microsoft Entra ID tenant containing your Key Vault."
+    },
+    {
+      "key": "clientId",
+      "label": "Application (Client) ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. 11111111-2222-3333-4444-555555555555",
+      "hint": "The App Registration Client ID with Key Vault Secrets permissions."
+    },
+    {
+      "key": "clientSecret",
+      "label": "Client Secret (Service Principal)",
+      "type": "password",
+      "required": false,
+      "placeholder": "Enter client secret value...",
+      "hint": "Required for automated service principal authentication. Leave blank if using interactive login."
+    },
+    {
+      "key": "authType",
+      "label": "Authentication Mode",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "label": "Client Secret (Service Principal / Recommended)", "value": "client_secret" },
+        { "label": "Interactive OAuth2 (Browser Login)", "value": "interactive" }
+      ]
+    }
+  ],
+  "scopes": [
+    "https://vault.azure.net/.default"
+  ]
+}
+

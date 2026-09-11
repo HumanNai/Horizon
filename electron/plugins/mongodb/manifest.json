@@ -1,0 +1,26 @@
+{
+  "id": "mongodb-core",
+  "name": "MongoDB Enterprise",
+  "description": "Unified NoSQL backend synchronizing products, releases, tasks, and team records into MongoDB collections with GridFS file storage.",
+  "version": "1.0.0",
+  "icon": "mongodb-icon",
+  "fields": [
+    {
+      "key": "connectionUri",
+      "label": "MongoDB Connection String URI",
+      "type": "text",
+      "required": true,
+      "placeholder": "mongodb+srv://<username>:<password>@cluster.mongodb.net/horizon_pm"
+    },
+    {
+      "key": "databaseName",
+      "label": "Database Name",
+      "type": "text",
+      "required": true,
+      "placeholder": "horizon_pm"
+    }
+  ],
+  "scopes": ["database.readWrite", "gridfs.readWrite"],
+  "authType": "uri"
+}
+

@@ -1,0 +1,43 @@
+{
+  "id": "onedrive-core",
+  "name": "Microsoft OneDrive Core",
+  "description": "Cloud drive storage for specifications, architecture RFCs, ICDs, and binary document attachments.",
+  "version": "1.0.0",
+  "icon": "onedrive-icon",
+  "fields": [
+    {
+      "key": "tenantId",
+      "label": "Tenant ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "common or your Azure AD Tenant GUID"
+    },
+    {
+      "key": "clientId",
+      "label": "Client ID (Application ID)",
+      "type": "text",
+      "required": true,
+      "placeholder": "Azure App Registration Client ID"
+    },
+    {
+      "key": "driveType",
+      "label": "Drive Destination",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "label": "Personal / Business OneDrive (/me/drive)", "value": "personal" },
+        { "label": "SharePoint Shared Document Library", "value": "business" }
+      ]
+    },
+    {
+      "key": "folderPath",
+      "label": "Cloud Folder Path",
+      "type": "text",
+      "required": false,
+      "placeholder": "/HorizonPM/Documents"
+    }
+  ],
+  "scopes": ["Files.ReadWrite.All", "User.Read", "offline_access"],
+  "authType": "oauth2"
+}
+

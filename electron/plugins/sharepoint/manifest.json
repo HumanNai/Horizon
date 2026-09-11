@@ -1,0 +1,49 @@
+{
+  "id": "sharepoint-core",
+  "name": "Microsoft SharePoint Core",
+  "description": "Synchronizes products, releases, tasks, test cases, APIs, and team availability with enterprise SharePoint lists.",
+  "version": "1.0.0",
+  "icon": "sharepoint-icon",
+  "fields": [
+    {
+      "key": "tenantId",
+      "label": "Tenant ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47 or your domain"
+    },
+    {
+      "key": "siteUrl",
+      "label": "SharePoint Site URL or Path",
+      "type": "url",
+      "required": true,
+      "placeholder": "https://tenant.sharepoint.com/sites/HorizonPM or /sites/HorizonPM"
+    },
+    {
+      "key": "clientId",
+      "label": "Azure AD Client ID (App ID)",
+      "type": "text",
+      "required": true,
+      "placeholder": "e4a5b6c7-d8e9-4f0a-1b2c-3d4e5f6a7b8c"
+    },
+    {
+      "key": "clientSecret",
+      "label": "Azure AD Client Secret (Optional - for Enterprise / Daemon Apps)",
+      "type": "password",
+      "required": false,
+      "placeholder": "Leave empty for interactive sign-in, or paste client secret"
+    },
+    {
+      "key": "permissionScope",
+      "label": "Permission Scope",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "label": "Read & write to all sites (Sites.ReadWrite.All)", "value": "Sites.ReadWrite.All" },
+        { "label": "Read & write selected sites (Sites.Selected)", "value": "Sites.Selected" }
+      ]
+    }
+  ],
+  "scopes": ["Sites.ReadWrite.All", "Files.ReadWrite.All", "User.Read"],
+  "authType": "oauth2"
+}

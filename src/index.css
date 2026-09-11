@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#070B19] text-white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Allow text selection in inputs and content areas */
+  input, textarea, select, [contenteditable], .selectable {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-app-region: no-drag !important;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B1229;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e2d52;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2E5EFF;
+}
+
+/* Electron frameless window drag regions */
+.app-region-drag {
+  -webkit-app-region: drag;
+}
+
+.app-region-no-drag,
+input,
+textarea,
+select,
+button,
+label,
+form,
+[role="dialog"],
+[role="dialog"] *,
+.modal-card,
+.modal-card * {
+  -webkit-app-region: no-drag !important;
+}
+
+input,
+textarea,
+select,
+[contenteditable] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+}
+
+/* Native Date Input Dark Styling & Calendar Indicator */
+input[type="date"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.8) brightness(1.2);
+  opacity: 0.85;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(1) brightness(1.6);
+}
