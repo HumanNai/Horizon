@@ -1,0 +1,32 @@
+name: Attach macOS Artifacts to Release
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/attach-existing-macos.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  attach-macos:
+    name: Upload macOS Artifacts to v1.1.0 Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS Artifacts from Run 34683978206
+        uses: actions/download-artifact@v4
+        with:
+          name: horizon-macos-1.1.0
+          run-id: 34683978206
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: macos-artifacts
+
+      - name: List Artifacts
+        run: ls -lh macos-artifacts
+
+      - name: Upload to GitHub Release v1.1.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload v1.1.0 macos-artifacts/* --clobber --repo ${{ github.repository }}
