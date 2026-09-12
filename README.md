@@ -74,24 +74,83 @@ Horizon provides pluggable, unified cloud synchronization with automatic delta-t
 
 ## 🏗️ Architecture
 
-`
-┌────────────────────────────────────────────────────────┐
-│                   React 18 Renderer                    │
-│   (Zustand Stores · Tailwind CSS · Lucide · Recharts)  │
-└───────────────────────────┬────────────────────────────┘
-                            │ ContextBridge (Typed IPC)
-┌───────────────────────────▼────────────────────────────┐
-│                  Electron Main Process                 │
-├────────────────────────────────────────────────────────┤
-│ • Local SQLite (WAL Mode · Memory Temp Store)          │
-│ • PBKDF2 / AES-256-GCM Cryptographic Vault             │
-│ • Background Delta Sync Agent (Mutation Queue)         │
-│ • Pluggable Cloud Adapters                             │
-└───────┬────────────┬─────────────┬─────────────┬───────┘
-        │            │             │             │
-        ▼            ▼             ▼             ▼
-    [MongoDB]  [Google Drive] [SharePoint]  [Azure KV]
-`
+```mermaid
+flowchart TB
+    subgraph UI["🖥️ Presentation Layer (React 18 Renderer)"]
+        direction TB
+        AppView["Application Views & Modules<br/><i>(Dashboard · Products · Releases · Tasks · UAT · Secrets)</i>"]
+        StateManagement["State Management & Data Clients<br/><i>(Zustand Stores · dbClient · Custom React Hooks)</i>"]
+        Components["UI Component System<br/><i>(Tailwind CSS · Lucide Icons · Recharts · Kanban Board)</i>"]
+        AppView --> StateManagement
+        StateManagement --> Components
+    end
+
+    subgraph Bridge["🔒 Secure Boundary (Preload Bridge)"]
+        direction LR
+        ContextBridge["window.horizon ContextBridge<br/><i>(contextIsolation: true · nodeIntegration: false)</i>"]
+        IPCRoutes["Typed IPC Channels<br/><i>(auth · db · secrets · sync · plugins · notify)</i>"]
+        ContextBridge <--> IPCRoutes
+    end
+
+    subgraph MainProcess["⚙️ Core Engine (Electron Main Process)"]
+        direction TB
+        MainApp["Main Process Lifecycle & Window Manager"]
+        
+        subgraph StorageCore["Storage & Cryptography Engine"]
+            SQLite[("Local SQLite Database<br/><i>WAL Mode · In-Memory Temp Store</i>")]
+            Vault["Cryptographic Vault Engine<br/><i>AES-256-GCM · PBKDF2-SHA256 (210k iterations)</i>"]
+            SyncAgent["Background Delta Sync Agent<br/><i>3-Min Interval · Mutation Queue · Conflict Resolver</i>"]
+        end
+
+        subgraph PluginSystem["Multi-Cloud Plugin Host"]
+            PluginHost["Pluggable Connector Registry"]
+            P_SP["SharePoint Online Connector"]
+            P_OD["OneDrive Connector"]
+            P_GD["Google Drive Connector"]
+            P_MG["MongoDB / GridFS Connector"]
+            P_AKV["Azure Key Vault Connector"]
+            
+            PluginHost --> P_SP
+            PluginHost --> P_OD
+            PluginHost --> P_GD
+            PluginHost --> P_MG
+            PluginHost --> P_AKV
+        end
+
+        MainApp --> StorageCore
+        MainApp --> PluginSystem
+        SyncAgent <--> SQLite
+        SyncAgent <--> PluginHost
+        Vault <--> SQLite
+    end
+
+    subgraph Cloud["☁️ External Cloud Storage & Identity"]
+        C_SP[("Microsoft SharePoint Online<br/><i>Enterprise Lists & Libraries</i>")]
+        C_OD[("Microsoft OneDrive<br/><i>Personal / Business Storage</i>")]
+        C_GD[("Google Drive<br/><i>Docs & Datasets via Loopback OAuth</i>")]
+        C_MG[("MongoDB Atlas<br/><i>Document Collections & GridFS</i>")]
+        C_AKV[("Azure Key Vault<br/><i>Hardware Security Modules (HSM)</i>")]
+    end
+
+    UI <===> Bridge
+    Bridge <===> MainProcess
+
+    P_SP <==>|"REST / MSAL"| C_SP
+    P_OD <==>|"Graph API"| C_OD
+    P_GD <==>|"v3 API / Loopback"| C_GD
+    P_MG <==>|"Native BSON"| C_MG
+    P_AKV <==>|"Azure SDK"| C_AKV
+
+    classDef uiLayer fill:#111d3c,stroke:#2E5EFF,stroke-width:2px,color:#ffffff;
+    classDef bridgeLayer fill:#0e1b38,stroke:#F5A623,stroke-width:2px,color:#ffffff;
+    classDef mainLayer fill:#0B1229,stroke:#3b82f6,stroke-width:2px,color:#ffffff;
+    classDef cloudLayer fill:#162040,stroke:#10b981,stroke-width:2px,color:#ffffff;
+
+    class UI uiLayer;
+    class Bridge bridgeLayer;
+    class MainProcess mainLayer;
+    class Cloud cloudLayer;
+```
 
 ---
 
@@ -105,25 +164,25 @@ Horizon provides pluggable, unified cloud synchronization with automatic delta-t
 ### Installation & Development
 
 1. **Clone the repository:**
-   `ash
+   ```bash
    git clone https://github.com/HumanNai/Horizon.git
    cd Horizon
-   `
+   ```
 
 2. **Install dependencies:**
-   `ash
+   ```bash
    npm install
-   `
+   ```
 
 3. **Start in development mode:**
-   `ash
+   ```bash
    npm run dev
-   `
+   ```
 
 ### Default Bootstrap Credentials
 Upon fresh initialization, Horizon creates an offline bootstrap administrator account:
-* **Username**: dmin
-* **Password**: horizon123
+* **Username**: `admin`
+* **Password**: `horizon123`
 *(Make sure to change this password in the Access / Settings section upon first login).*
 
 ---
@@ -132,46 +191,121 @@ Upon fresh initialization, Horizon creates an offline bootstrap administrator ac
 
 To compile and package self-contained, production-ready Windows installers and portable executables:
 
-`ash
+```bash
 # Build the Vite renderer and Electron main bundles
 npm run build
 
 # Package portable executable and NSIS installer
 npm run package
-`
+```
 
-Packaged outputs will be generated in elease/:
-* Horizon-Setup-1.0.0.exe (NSIS Installer)
-* Horizon-1.0.0-portable.exe (Standalone Portable Executable)
-* Horizon.exe (Convenience launcher)
+Packaged outputs will be generated in `release/`:
+* `Horizon-Setup-1.0.0.exe` (NSIS Installer)
+* `Horizon-1.0.0-portable.exe` (Standalone Portable Executable)
+* `Horizon-1.0.0-win-unpacked.zip` (Complete Unpacked Application Archive)
+* `Horizon.exe` (Convenience launcher)
 
 ---
 
 ## 📁 Project Structure
 
-`
-├── build/               # Icons and packaging assets
-├── electron/            # Electron main process source
-│   ├── db/              # SQLite schema, migrations, and table definitions
-│   ├── ipc/             # Typed IPC handlers (auth, db, secrets, sync, notify)
-│   ├── plugins/         # Multi-cloud storage adapters
-│   │   ├── azure-keyvault/
-│   │   ├── google-drive/
-│   │   ├── mongodb/
-│   │   ├── onedrive/
-│   │   └── sharepoint/
-│   ├── main.ts          # Main process bootstrap & lifecycle
-│   └── preload.ts       # Secure context bridge API
-├── src/                 # React 18 frontend
-│   ├── components/      # Reusable UI component library & layouts
-│   ├── hooks/           # Custom React hooks (sync, notifications)
-│   ├── pages/           # Application views (Dashboard, Products, Releases, Secrets...)
-│   ├── store/           # Zustand state management stores
-│   └── types/           # Shared TypeScript domain contracts
-├── LICENSE              # Apache License 2.0
-├── NOTICE               # Attribution and third-party notices
+```mermaid
+flowchart TD
+    subgraph Root["📁 Horizon Repository Root"]
+        direction TB
+
+        subgraph B_Electron["⚡ electron/ — Main Process"]
+            direction TB
+            E_Main["main.ts<br/><i>App Lifecycle & Window Host</i>"]
+            E_Preload["preload.ts<br/><i>Typed ContextBridge API</i>"]
+            E_DB["db/<br/><i>SQLite Schema, WAL & Migrations</i>"]
+            E_IPC["ipc/<br/><i>Auth, DB, Secrets, Sync & Notifications</i>"]
+            subgraph E_Plugins["plugins/ — Multi-Cloud Connectors"]
+                direction LR
+                P1["azure-keyvault/"]
+                P2["google-drive/"]
+                P3["mongodb/"]
+                P4["onedrive/"]
+                P5["sharepoint/"]
+            end
+            E_Main --> E_IPC
+            E_IPC --> E_DB
+            E_IPC --> E_Plugins
+        end
+
+        subgraph B_Src["⚛️ src/ — React 18 Frontend"]
+            direction TB
+            S_Pages["pages/<br/><i>Dashboard · Products · Releases · Tasks · Secrets · UAT</i>"]
+            S_Store["store/<br/><i>Zustand Stores & SQLite dbClient</i>"]
+            S_Comp["components/<br/><i>UI Kit, KanbanBoard & PipelineBar</i>"]
+            S_Hooks["hooks/<br/><i>Sync, Notifications & Maximizer</i>"]
+            S_Types["types/<br/><i>Domain Models & Shared Contracts</i>"]
+            S_Pages --> S_Store
+            S_Store --> S_Comp
+            S_Store --> S_Types
+        end
+
+        subgraph B_Config["⚙️ Configuration & Tooling"]
+            direction TB
+            C_Build["build/ & images/<br/><i>Icons, Logos & Packaging Assets</i>"]
+            C_Cfg["electron.vite.config.ts<br/><i>Vite Multi-Bundle Bundler</i>"]
+            C_Bld["electron-builder.config.js<br/><i>NSIS & Portable Packaging</i>"]
+            C_GH[".github/<br/><i>CI/CD Pipelines & Issue Templates</i>"]
+        end
+
+        Root --> B_Electron
+        Root --> B_Src
+        Root --> B_Config
+    end
+
+    classDef rootStyle fill:#0B1229,stroke:#2E5EFF,stroke-width:2px,color:#ffffff;
+    classDef subStyle fill:#111d3c,stroke:#1e2d52,stroke-width:1px,color:#ffffff;
+    classDef nodeStyle fill:#162040,stroke:#3b82f6,stroke-width:1px,color:#ffffff;
+
+    class Root rootStyle;
+    class B_Electron,B_Src,B_Config,E_Plugins subStyle;
+    class E_Main,E_Preload,E_DB,E_IPC,P1,P2,P3,P4,P5,S_Pages,S_Store,S_Comp,S_Hooks,S_Types,C_Build,C_Cfg,C_Bld,C_GH nodeStyle;
+```
+
+<details>
+<summary><b>📂 Full Directory Tree View</b> (click to expand)</summary>
+
+```text
+├── .github/
+│   ├── ISSUE_TEMPLATE/       # Bug report & feature request templates
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── workflows/ci.yml      # GitHub Actions CI workflow
+├── build/                    # Packaging assets & executable icons
+├── electron/                 # Electron main process source
+│   ├── db/                   # SQLite schema, migrations, and table definitions
+│   ├── ipc/                  # Typed IPC handlers (auth, db, secrets, sync, notify)
+│   ├── plugins/              # Multi-cloud storage adapters
+│   │   ├── azure-keyvault/   # Azure Key Vault connector
+│   │   ├── google-drive/     # Google Drive v3 connector
+│   │   ├── mongodb/          # MongoDB Atlas & GridFS connector
+│   │   ├── onedrive/         # OneDrive for Business connector
+│   │   └── sharepoint/       # SharePoint Online connector
+│   ├── main.ts               # Main process bootstrap & lifecycle
+│   └── preload.ts            # Secure context bridge API
+├── images/                   # App logos & branding graphics
+├── src/                      # React 18 frontend
+│   ├── assets/               # Bundled UI images
+│   ├── components/           # Reusable UI component library & layouts
+│   ├── hooks/                # Custom React hooks (sync, notifications)
+│   ├── layouts/              # AppShell layout with custom titlebar
+│   ├── pages/                # Application views (Dashboard, Products, Releases, Secrets...)
+│   ├── store/                # Zustand state management stores
+│   └── types/                # Shared TypeScript domain contracts
+├── CODE_OF_CONDUCT.md        # Contributor Covenant v2.1
+├── CONTRIBUTING.md           # Contribution guidelines
+├── LICENSE                   # Apache License 2.0
+├── NOTICE                    # Attribution and third-party notices
+├── README.md                 # Project documentation
+├── SECURITY.md               # Security and vulnerability policy
 └── package.json
-`
+```
+
+</details>
 
 ---
 
@@ -197,7 +331,7 @@ For vulnerability disclosure and security reporting guidelines, please consult o
 
 Horizon PM is open-source software licensed under the **[Apache License, Version 2.0](LICENSE)**.
 
-`
+```text
 Copyright 2024-2026 Horizon Contributors
 
 Licensed under the Apache License, Version 2.0 (the License);
@@ -205,4 +339,4 @@ you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-`
+```
