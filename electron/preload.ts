@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../src/types';
 
 const horizonAPI = {
+  platform: process.platform,
   auth: {
     login: (req: any) => ipcRenderer.invoke(IPC.AUTH_LOGIN, req),
     logout: (token: string) => ipcRenderer.invoke(IPC.AUTH_LOGOUT, token),

@@ -184,21 +184,28 @@ Upon fresh initialization, Horizon creates an offline bootstrap administrator ac
 
 ## 📦 Building & Packaging
 
-To compile and package self-contained, production-ready Windows installers and portable executables:
+To compile and package self-contained, production-ready installers and portable binaries:
 
+### Windows Packaging
 ```bash
-# Build the Vite renderer and Electron main bundles
-npm run build
-
-# Package portable executable and NSIS installer
-npm run package
+# Build Vite bundles and package Windows NSIS setup and portable executables
+npm run package:win
 ```
-
 Packaged outputs will be generated in `release/`:
-* `Horizon-Setup-1.0.0.exe` (NSIS Installer)
-* `Horizon-1.0.0-portable.exe` (Standalone Portable Executable)
-* `Horizon-1.0.0-win-unpacked.zip` (Complete Unpacked Application Archive)
-* `Horizon.exe` (Convenience launcher)
+* `Horizon-Setup-1.1.0.exe` (NSIS Installer)
+* `Horizon-1.1.0-portable.exe` (Standalone Portable Executable)
+* `Horizon-1.1.0-win-unpacked.zip` (Complete Unpacked Application Archive)
+
+### macOS Packaging
+*Note: macOS packaging uses native Darwin toolchains and is built on macOS or automatically via our GitHub Actions workflow (`.github/workflows/package.yml`).*
+```bash
+# On macOS: Build Vite bundles and package DMG & ZIP distributions
+npm run package:mac
+```
+Packaged outputs will be generated in `release/`:
+* `Horizon-1.1.0-mac-arm64.dmg` (Apple Silicon DMG Installer)
+* `Horizon-1.1.0-mac-x64.dmg` (Intel Mac DMG Installer)
+* `Horizon-1.1.0-mac-arm64.zip` & `Horizon-1.1.0-mac-x64.zip` (Direct Application Archives)
 
 ---
 

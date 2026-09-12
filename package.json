@@ -1,6 +1,6 @@
 {
   "name": "horizon-pm",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Horizon — Offline-first, multi-cloud enterprise Product Management desktop application",
   "license": "Apache-2.0",
   "author": "Nero-902 <horizon@humannai.in>",
@@ -33,6 +33,9 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
+    "package:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
+    "package:all": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder -mw",
     "lint": "eslint src electron --ext .ts,.tsx"
   },
   "dependencies": {

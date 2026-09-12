@@ -50,6 +50,43 @@ module.exports = {
     requestExecutionLevel: 'user',
     unpackDirName: 'HorizonPM'
   },
+  mac: {
+    icon: 'build/icon.png',
+    target: [
+      {
+        target: 'dmg',
+        arch: ['x64', 'arm64']
+      },
+      {
+        target: 'zip',
+        arch: ['x64', 'arm64']
+      }
+    ],
+    category: 'public.app-category.productivity',
+    darkModeSupport: true,
+    hardenedRuntime: false,
+    gatekeeperAssess: false,
+    identity: null,
+    artifactName: 'Horizon-${version}-mac-${arch}.${ext}'
+  },
+  dmg: {
+    contents: [
+      {
+        x: 130,
+        y: 220
+      },
+      {
+        x: 410,
+        y: 220,
+        type: 'link',
+        path: '/Applications'
+      }
+    ],
+    window: {
+      width: 540,
+      height: 380
+    }
+  },
   asar: true,
   asarUnpack: [
     '**/node_modules/better-sqlite3/**',

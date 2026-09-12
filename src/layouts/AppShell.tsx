@@ -252,6 +252,8 @@ export function AppShell() {
   ]
 
 
+  const isMac = (window as any).horizon?.platform === 'darwin'
+
   const handleWindowAction = (action: 'minimize' | 'maximize' | 'close') => {
     (window as any).horizon?.window?.[action]?.()
   }
@@ -266,7 +268,7 @@ export function AppShell() {
       {/* Sleek Dark Sidebar */}
       <aside className={`transition-all duration-300 ease-in-out flex flex-col border-r border-[#15203D] bg-[#0A1024]/90 backdrop-blur-xl z-20 shrink-0 ${collapsed ? 'w-16' : 'w-56 lg:w-64'}`}>
         {/* Brand Header */}
-        <div className="h-14 sm:h-16 flex items-center justify-between px-2.5 sm:px-3 border-b border-[#15203D] app-region-drag select-none">
+        <div className={`h-14 sm:h-16 flex items-center justify-between px-2.5 sm:px-3 border-b border-[#15203D] app-region-drag select-none ${isMac ? (collapsed ? 'pt-6' : 'pl-16') : ''}`}>
           {!collapsed ? (
             <div className="flex items-center gap-2 app-region-no-drag cursor-pointer py-1" onClick={() => navigate('/dashboard')}>
               <img 
@@ -565,30 +567,32 @@ export function AppShell() {
               )}
             </div>
             
-            {/* Custom Frameless Window Controls */}
-            <div className="flex items-center gap-0.5 border-l border-[#15203D] pl-1.5 sm:pl-2.5 ml-0.5 shrink-0">
-              <button 
-                onClick={() => handleWindowAction('minimize')} 
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                title="Minimize"
-              >
-                <Minus size={13} />
-              </button>
-              <button 
-                onClick={toggleMaximize} 
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                title={isMaximized ? "Restore" : "Maximize"}
-              >
-                {isMaximized ? <RestoreIcon size={11} /> : <Square size={11} />}
-              </button>
-              <button 
-                onClick={() => handleWindowAction('close')} 
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 transition-colors"
-                title="Close"
-              >
-                <CloseIcon size={14} />
-              </button>
-            </div>
+            {/* Custom Frameless Window Controls (Windows / Linux only) */}
+            {!isMac && (
+              <div className="flex items-center gap-0.5 border-l border-[#15203D] pl-1.5 sm:pl-2.5 ml-0.5 shrink-0">
+                <button 
+                  onClick={() => handleWindowAction('minimize')} 
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Minimize"
+                >
+                  <Minus size={13} />
+                </button>
+                <button 
+                  onClick={toggleMaximize} 
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                  title={isMaximized ? "Restore" : "Maximize"}
+                >
+                  {isMaximized ? <RestoreIcon size={11} /> : <Square size={11} />}
+                </button>
+                <button 
+                  onClick={() => handleWindowAction('close')} 
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 transition-colors"
+                  title="Close"
+                >
+                  <CloseIcon size={14} />
+                </button>
+              </div>
+            )}
           </div>
         </header>
 

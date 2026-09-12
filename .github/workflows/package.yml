@@ -1,0 +1,79 @@
+name: Multi-Platform Package (Windows & macOS)
+
+on:
+  push:
+    branches: [ main, feature/mac-support ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-windows:
+    name: Package Windows (Installer & Portable)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build & Package Windows Executables
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run package:win
+
+      - name: Archive Unpacked Distribution
+        run: Compress-Archive -Path "release\win-unpacked\*" -DestinationPath "release\Horizon-1.1.0-win-unpacked.zip" -Force
+        shell: pwsh
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-windows-1.1.0
+          path: |
+            release/*.exe
+            release/*.zip
+          if-no-files-found: error
+
+  package-macos:
+    name: Package macOS (DMG & ZIP)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies & Native Modules
+        run: npm ci
+
+      - name: Build & Package macOS Artifacts
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run package:mac
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: horizon-macos-1.1.0
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error

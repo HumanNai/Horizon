@@ -41,6 +41,7 @@ let db: Database.Database;
 let pluginHost: PluginHost;
 
 function createWindow(): BrowserWindow {
+  const isMac = process.platform === 'darwin';
   const iconPath = process.platform === 'win32'
     ? path.join(app.getAppPath(), 'images', 'app_icon.ico')
     : path.join(app.getAppPath(), 'images', 'app_icon.png');
@@ -50,6 +51,8 @@ function createWindow(): BrowserWindow {
     minWidth: 800,
     minHeight: 520,
     frame: false,
+    titleBarStyle: isMac ? 'hiddenInset' : undefined,
+    trafficLightPosition: isMac ? { x: 16, y: 16 } : undefined,
     title: 'Horizon — Product Management',
     backgroundColor: '#070B19',
     icon: iconPath,
@@ -246,24 +249,61 @@ function initApp() {
 app.whenReady().then(() => {
   initApp();
 
-  // Register standard editing accelerators (Undo, Redo, Cut, Copy, Paste, Select All)
-  // Ensures reliable keyboard input handling in frameless Electron window
-  const editMenu = Menu.buildFromTemplate([
-    {
-      label: 'Edit',
+  if (process.platform === 'darwin') {
+    try {
+      app.dock?.setIcon?.(path.join(app.getAppPath(), 'images', 'app_icon.png'));
+    } catch {}
+  }
+
+  // Register standard editing & system accelerators
+  // Provides native keyboard shortcuts (Undo, Redo, Cut, Copy, Paste, Select All, Quit, Zoom)
+  const menuTemplate: any[] = [];
+
+  if (process.platform === 'darwin') {
+    menuTemplate.push({
+      label: app.name,
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { role: 'about' },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'delete' },
-        { role: 'selectAll' }
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
       ]
-    }
-  ]);
-  Menu.setApplicationMenu(editMenu);
+    });
+  }
+
+  menuTemplate.push({
+    label: 'Edit',
+    submenu: [
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { role: 'delete' },
+      { role: 'selectAll' }
+    ]
+  });
+
+  if (process.platform === 'darwin') {
+    menuTemplate.push({
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' }
+      ]
+    });
+  }
+
+  const appMenu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(appMenu);
 
   mainWindow = createWindow();
   pluginLogger.registerWindow(mainWindow);
@@ -274,13 +314,16 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       mainWindow = createWindow();
+      pluginLogger.registerWindow(mainWindow);
     }
   });
 });
 
 app.on('window-all-closed', () => {
-  try {
-    db?.close();
-  } catch {}
-  app.exit(0);
+  if (process.platform !== 'darwin') {
+    try {
+      db?.close();
+    } catch {}
+    app.exit(0);
+  }
 });
