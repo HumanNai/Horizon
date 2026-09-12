@@ -95,33 +95,28 @@ flowchart TB
     subgraph MainProcess["⚙️ Core Engine (Electron Main Process)"]
         direction TB
         MainApp["Main Process Lifecycle & Window Manager"]
-        
-        subgraph StorageCore["Storage & Cryptography Engine"]
-            SQLite[("Local SQLite Database<br/><i>WAL Mode · In-Memory Temp Store</i>")]
-            Vault["Cryptographic Vault Engine<br/><i>AES-256-GCM · PBKDF2-SHA256 (210k iterations)</i>"]
-            SyncAgent["Background Delta Sync Agent<br/><i>3-Min Interval · Mutation Queue · Conflict Resolver</i>"]
-        end
+        SQLite[("Local SQLite Database<br/><i>WAL Mode · In-Memory Temp Store</i>")]
+        Vault["Cryptographic Vault Engine<br/><i>AES-256-GCM · PBKDF2-SHA256</i>"]
+        SyncAgent["Background Delta Sync Agent<br/><i>3-Min Interval · Mutation Queue · Conflict Resolver</i>"]
+        PluginHost["Pluggable Connector Registry"]
 
-        subgraph PluginSystem["Multi-Cloud Plugin Host"]
-            PluginHost["Pluggable Connector Registry"]
-            P_SP["SharePoint Online Connector"]
-            P_OD["OneDrive Connector"]
-            P_GD["Google Drive Connector"]
-            P_MG["MongoDB / GridFS Connector"]
-            P_AKV["Azure Key Vault Connector"]
-            
-            PluginHost --> P_SP
-            PluginHost --> P_OD
-            PluginHost --> P_GD
-            PluginHost --> P_MG
-            PluginHost --> P_AKV
-        end
+        P_SP["SharePoint Online Connector"]
+        P_OD["OneDrive Connector"]
+        P_GD["Google Drive Connector"]
+        P_MG["MongoDB / GridFS Connector"]
+        P_AKV["Azure Key Vault Connector"]
 
-        MainApp --> StorageCore
-        MainApp --> PluginSystem
+        MainApp --> SQLite
+        MainApp --> PluginHost
+        Vault <--> SQLite
         SyncAgent <--> SQLite
         SyncAgent <--> PluginHost
-        Vault <--> SQLite
+
+        PluginHost --> P_SP
+        PluginHost --> P_OD
+        PluginHost --> P_GD
+        PluginHost --> P_MG
+        PluginHost --> P_AKV
     end
 
     subgraph Cloud["☁️ External Cloud Storage & Identity"]
@@ -132,8 +127,8 @@ flowchart TB
         C_AKV[("Azure Key Vault<br/><i>Hardware Security Modules (HSM)</i>")]
     end
 
-    UI <===> Bridge
-    Bridge <===> MainProcess
+    StateManagement <===> ContextBridge
+    IPCRoutes <===> MainApp
 
     P_SP <==>|"REST / MSAL"| C_SP
     P_OD <==>|"Graph API"| C_OD
@@ -210,61 +205,51 @@ Packaged outputs will be generated in `release/`:
 ## 📁 Project Structure
 
 ```mermaid
-flowchart TD
-    subgraph Root["📁 Horizon Repository Root"]
+flowchart TB
+    subgraph B_Electron["⚡ electron/ — Electron Main Process"]
         direction TB
+        E_Main["main.ts<br/><i>App Lifecycle & Window Host</i>"]
+        E_Preload["preload.ts<br/><i>Secure ContextBridge API</i>"]
+        E_DB["db/<br/><i>SQLite Schema, WAL & Migrations</i>"]
+        E_IPC["ipc/<br/><i>Auth, DB, Secrets, Sync & Notifications</i>"]
+        E_Plugins["plugins/<br/><i>SharePoint · Google Drive · MongoDB · Key Vault</i>"]
 
-        subgraph B_Electron["⚡ electron/ — Main Process"]
-            direction TB
-            E_Main["main.ts<br/><i>App Lifecycle & Window Host</i>"]
-            E_Preload["preload.ts<br/><i>Typed ContextBridge API</i>"]
-            E_DB["db/<br/><i>SQLite Schema, WAL & Migrations</i>"]
-            E_IPC["ipc/<br/><i>Auth, DB, Secrets, Sync & Notifications</i>"]
-            subgraph E_Plugins["plugins/ — Multi-Cloud Connectors"]
-                direction LR
-                P1["azure-keyvault/"]
-                P2["google-drive/"]
-                P3["mongodb/"]
-                P4["onedrive/"]
-                P5["sharepoint/"]
-            end
-            E_Main --> E_IPC
-            E_IPC --> E_DB
-            E_IPC --> E_Plugins
-        end
-
-        subgraph B_Src["⚛️ src/ — React 18 Frontend"]
-            direction TB
-            S_Pages["pages/<br/><i>Dashboard · Products · Releases · Tasks · Secrets · UAT</i>"]
-            S_Store["store/<br/><i>Zustand Stores & SQLite dbClient</i>"]
-            S_Comp["components/<br/><i>UI Kit, KanbanBoard & PipelineBar</i>"]
-            S_Hooks["hooks/<br/><i>Sync, Notifications & Maximizer</i>"]
-            S_Types["types/<br/><i>Domain Models & Shared Contracts</i>"]
-            S_Pages --> S_Store
-            S_Store --> S_Comp
-            S_Store --> S_Types
-        end
-
-        subgraph B_Config["⚙️ Configuration & Tooling"]
-            direction TB
-            C_Build["build/ & images/<br/><i>Icons, Logos & Packaging Assets</i>"]
-            C_Cfg["electron.vite.config.ts<br/><i>Vite Multi-Bundle Bundler</i>"]
-            C_Bld["electron-builder.config.js<br/><i>NSIS & Portable Packaging</i>"]
-            C_GH[".github/<br/><i>CI/CD Pipelines & Issue Templates</i>"]
-        end
-
-        Root --> B_Electron
-        Root --> B_Src
-        Root --> B_Config
+        E_Main --> E_IPC
+        E_IPC --> E_DB
+        E_IPC --> E_Plugins
     end
 
-    classDef rootStyle fill:#0B1229,stroke:#2E5EFF,stroke-width:2px,color:#ffffff;
-    classDef subStyle fill:#111d3c,stroke:#1e2d52,stroke-width:1px,color:#ffffff;
-    classDef nodeStyle fill:#162040,stroke:#3b82f6,stroke-width:1px,color:#ffffff;
+    subgraph B_Src["⚛️ src/ — React 18 Frontend"]
+        direction TB
+        S_Pages["pages/<br/><i>Dashboard · Products · Releases · Tasks · Secrets · UAT</i>"]
+        S_Store["store/<br/><i>Zustand State Stores & dbClient</i>"]
+        S_Comp["components/<br/><i>UI Kit, KanbanBoard & PipelineBar</i>"]
+        S_Types["types/<br/><i>Shared Contracts & IPC Signatures</i>"]
 
-    class Root rootStyle;
-    class B_Electron,B_Src,B_Config,E_Plugins subStyle;
-    class E_Main,E_Preload,E_DB,E_IPC,P1,P2,P3,P4,P5,S_Pages,S_Store,S_Comp,S_Hooks,S_Types,C_Build,C_Cfg,C_Bld,C_GH nodeStyle;
+        S_Pages --> S_Store
+        S_Store --> S_Comp
+        S_Store --> S_Types
+    end
+
+    subgraph B_Config["⚙️ Project Configurations & Tooling"]
+        direction TB
+        C_Build["build/ & images/<br/><i>Icons, Logos & Windows Assets</i>"]
+        C_Cfg["electron.vite.config.ts<br/><i>Vite Multi-Bundle Bundler</i>"]
+        C_Bld["electron-builder.config.js<br/><i>NSIS & Portable Packaging</i>"]
+        C_GH[".github/<br/><i>CI/CD Pipelines & Issue Templates</i>"]
+    end
+
+    B_Src <===>|"IPC ContextBridge"| B_Electron
+    B_Electron -.->|"Packaged by"| B_Config
+    B_Src -.->|"Packaged by"| B_Config
+
+    classDef elStyle fill:#111d3c,stroke:#2E5EFF,stroke-width:2px,color:#ffffff;
+    classDef srcStyle fill:#111d3c,stroke:#F5A623,stroke-width:2px,color:#ffffff;
+    classDef cfgStyle fill:#111d3c,stroke:#10b981,stroke-width:2px,color:#ffffff;
+
+    class B_Electron elStyle;
+    class B_Src srcStyle;
+    class B_Config cfgStyle;
 ```
 
 <details>
