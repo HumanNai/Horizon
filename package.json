@@ -32,10 +32,10 @@
     "start": "electron-vite build && node run.js",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
-    "package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
-    "package:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
-    "package:all": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder -mw",
+    "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
+    "package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
+    "package:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "package:all": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder -mw --publish never",
     "lint": "eslint src electron --ext .ts,.tsx"
   },
   "dependencies": {

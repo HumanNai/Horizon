@@ -4,8 +4,9 @@
 module.exports = {
   appId: 'com.horizon.pm',
   productName: 'Horizon',
-  copyright: 'Copyright © 2024 Horizon PM',
+  copyright: 'Copyright © 2024-2026 Horizon Contributors',
   npmRebuild: false,
+  publish: null,
   // Skip code signing — not needed for internal portable builds
   // Set CSC_IDENTITY_AUTO_DISCOVERY=false to suppress winCodeSign download
   compression: 'maximum',

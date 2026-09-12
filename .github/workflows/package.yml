@@ -7,6 +7,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -32,6 +35,7 @@ jobs:
       - name: Build & Package Windows Executables
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package:win
 
       - name: Archive Unpacked Distribution
@@ -67,6 +71,7 @@ jobs:
       - name: Build & Package macOS Artifacts
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package:mac
 
       - name: Upload macOS Artifacts
