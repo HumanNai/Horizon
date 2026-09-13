@@ -53,6 +53,8 @@ module.exports = {
   },
   mac: {
     icon: 'build/icon.png',
+    entitlements: 'build/entitlements.mac.plist',
+    entitlementsInherit: 'build/entitlements.mac.plist',
     target: [
       {
         target: 'dmg',
@@ -69,6 +71,24 @@ module.exports = {
     gatekeeperAssess: false,
     identity: null,
     artifactName: 'Horizon-${version}-mac-${arch}.${ext}'
+  },
+  afterPack: async (context) => {
+    if (context.electronPlatformName === 'darwin' && process.platform === 'darwin') {
+      const { execSync } = require('child_process');
+      const path = require('path');
+      const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+      const entitlementsPath = path.join(context.packager.projectDir, 'build', 'entitlements.mac.plist');
+
+      console.log(`[Horizon] Applying ad-hoc codesign with entitlements to: ${appPath}`);
+      try {
+        try { execSync(`xattr -cr "${appPath}"`, { stdio: 'ignore' }); } catch (_) {}
+        execSync(`codesign --force --deep --sign - --entitlements "${entitlementsPath}" "${appPath}"`, { stdio: 'inherit' });
+        execSync(`codesign --verify --deep --strict --verbose=2 "${appPath}"`, { stdio: 'inherit' });
+        console.log(`[Horizon] Ad-hoc codesign completed successfully.`);
+      } catch (err) {
+        console.warn(`[Horizon] Codesign warning: ${err.message}`);
+      }
+    }
   },
   dmg: {
     contents: [

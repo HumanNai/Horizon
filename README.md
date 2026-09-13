@@ -209,6 +209,45 @@ Packaged outputs will be generated in `release/`:
 
 ---
 
+## 🛡️ Installation & Security Guide (macOS & Windows)
+
+Horizon is completely open-source, private, and offline-first. Because Horizon releases are distributed directly via GitHub without paid corporate enterprise certificates (such as Microsoft Authenticode EV or Apple Developer ID), modern operating system security filters (Windows SmartScreen and Apple Gatekeeper) will display a security advisory upon first launch.
+
+> [!NOTE]
+> All released binaries are scanned and verified 100% clean. Horizon contains zero spyware, malware, adware, or telemetry.
+
+### 🍏 macOS (Sequoia 15+, Sonoma 14+, Ventura 13+)
+
+When downloading `Horizon.app` from a web browser, macOS tags the file with a quarantine attribute (`com.apple.quarantine`). If Gatekeeper blocks opening on first launch with a message like *"Horizon.app was not opened because it contains malware"* or *"cannot be checked"*:
+
+#### Option A: Via System Settings (Recommended GUI method)
+1. Double-click `Horizon-1.1.0-mac-arm64.dmg` (or Intel `x64.dmg`) and drag **Horizon** to **Applications**.
+2. Try opening **Horizon** from Applications. If Gatekeeper displays a prompt, click **Cancel**.
+3. Open **System Settings** on your Mac.
+4. Navigate to **Privacy & Security** and scroll down to the **Security** section.
+5. You will see: *"Horizon.app was blocked from use because it is not from an identified developer"*.
+6. Click **Open Anyway** and enter your Mac password or Touch ID.
+7. Click **Open** on the final confirmation. Horizon will now launch normally on every future start.
+
+#### Option B: Via Terminal (One-line instant fix)
+Open the **Terminal** app and run:
+```bash
+xattr -cr /Applications/Horizon.app
+```
+*(This immediately removes the browser quarantine flag from Horizon.app, allowing Gatekeeper to open it instantly without warnings).*
+
+---
+
+### 🪟 Windows (Windows 10 / 11)
+
+When running `Horizon-Setup-1.1.0.exe` or `Horizon-1.1.0-portable.exe`:
+1. If Microsoft Defender SmartScreen displays: *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting"*:
+2. Click **More info**.
+3. Click the **Run anyway** button that appears.
+4. Horizon will install/start immediately. Windows will remember this preference for subsequent launches.
+
+---
+
 ## 📁 Project Structure
 
 ```mermaid
