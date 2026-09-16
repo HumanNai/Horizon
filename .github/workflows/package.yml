@@ -58,7 +58,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF.Substring(10) } else { "v1.1.0" }
-          gh release upload $tag release/*.exe release/*.zip --clobber
+          $files = (Get-Item release/*.exe, release/*.zip).FullName
+          gh release upload $tag $files --clobber
 
   package-macos:
     name: Package macOS (DMG & ZIP)
