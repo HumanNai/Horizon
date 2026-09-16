@@ -52,7 +52,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach Windows Artifacts to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/mac-support'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,11 +93,12 @@ jobs:
           if-no-files-found: error
 
       - name: Attach macOS Artifacts to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/mac-support'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           [ "$TAG" = "$GITHUB_REF" ] && TAG="v1.1.0"
           gh release upload "$TAG" release/*.dmg release/*.zip --clobber
+
 

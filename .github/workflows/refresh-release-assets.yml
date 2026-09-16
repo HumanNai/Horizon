@@ -1,0 +1,32 @@
+name: Refresh Release Assets v1.1.0
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/refresh-release-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-assets:
+    name: Upload Fresh Signed macOS & Windows Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download macOS Artifacts from Run 34748887480
+        uses: actions/download-artifact@v4
+        with:
+          name: horizon-macos-1.1.0
+          run-id: 34748887480
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: macos-artifacts
+
+      - name: Verify Downloaded Artifacts
+        run: ls -lh macos-artifacts
+
+      - name: Upload Fresh Binaries to GitHub Release v1.1.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload v1.1.0 macos-artifacts/* --clobber --repo ${{ github.repository }}

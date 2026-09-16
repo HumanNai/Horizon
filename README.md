@@ -218,23 +218,30 @@ Horizon is completely open-source, private, and offline-first. Because Horizon r
 
 ### 🍏 macOS (Sequoia 15+, Sonoma 14+, Ventura 13+)
 
-When downloading `Horizon.app` from a web browser, macOS tags the file with a quarantine attribute (`com.apple.quarantine`). If Gatekeeper blocks opening on first launch with a message like *"Horizon.app was not opened because it contains malware"* or *"cannot be checked"*:
+When downloading `Horizon.app` from a web browser, macOS tags the file with a quarantine attribute (`com.apple.quarantine`). If Gatekeeper blocks opening on first launch with a message like *"Horizon.app was not opened because it contains malware"* or *"cannot be checked"*, use either of the options below:
 
-#### Option A: Via System Settings (Recommended GUI method)
+#### Option A: 1-Line Automated Install (Easiest & Completely Bypasses Gatekeeper)
+Open your Mac **Terminal** (press `Cmd + Space`, type `Terminal`, and press `Enter`), then paste:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/HumanNai/Horizon/main/install.sh)"
+```
+> *This automatically detects Apple Silicon or Intel, downloads the latest release, installs Horizon to `/Applications`, clears the quarantine attribute, and launches Horizon cleanly.*
+
+#### Option B: Via System Settings (GUI Method)
 1. Double-click `Horizon-1.1.0-mac-arm64.dmg` (or Intel `x64.dmg`) and drag **Horizon** to **Applications**.
-2. Try opening **Horizon** from Applications. If Gatekeeper displays a prompt, click **Cancel**.
+2. Try opening **Horizon** from Applications. If Gatekeeper displays a prompt, click **Cancel** (or if moved to trash, open Trash, right-click `Horizon.app`, and choose **Put Back**).
 3. Open **System Settings** on your Mac.
 4. Navigate to **Privacy & Security** and scroll down to the **Security** section.
 5. You will see: *"Horizon.app was blocked from use because it is not from an identified developer"*.
 6. Click **Open Anyway** and enter your Mac password or Touch ID.
 7. Click **Open** on the final confirmation. Horizon will now launch normally on every future start.
 
-#### Option B: Via Terminal (One-line instant fix)
-Open the **Terminal** app and run:
+#### Option C: Manual Terminal Command (Instant Fix)
+If you already dragged Horizon to Applications, run:
 ```bash
 xattr -cr /Applications/Horizon.app
 ```
-*(This immediately removes the browser quarantine flag from Horizon.app, allowing Gatekeeper to open it instantly without warnings).*
+*(This immediately removes the browser quarantine flag from Horizon.app, allowing Gatekeeper to open it instantly).*
 
 ---
 
