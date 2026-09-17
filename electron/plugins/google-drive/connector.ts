@@ -108,7 +108,7 @@ export class GoogleDriveConnector implements BackendProvider {
             res.end(`<html><body style="font-family:sans-serif;background:#070B19;color:#fff;text-align:center;padding:50px;">
               <h2 style="color:#F43F5E;">Authentication Failed</h2><p>${error}</p></body></html>`);
             clearTimeout(timeout);
-            server.close();
+            server?.close();
             reject(new Error(`Google sign-in error: ${error}`));
             return;
           }
@@ -128,7 +128,7 @@ export class GoogleDriveConnector implements BackendProvider {
               </html>`);
 
             clearTimeout(timeout);
-            server.close();
+            server?.close();
 
             // Exchange auth code for tokens
             const tokenParams = new URLSearchParams({
@@ -164,7 +164,7 @@ export class GoogleDriveConnector implements BackendProvider {
           }
         } catch (e: any) {
           clearTimeout(timeout);
-          try { server.close(); } catch (_) {}
+          try { server?.close(); } catch (_) {}
           reject(e);
         }
       });

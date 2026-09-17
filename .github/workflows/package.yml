@@ -39,7 +39,6 @@ jobs:
         run: npm run package:win
 
       - name: Archive Unpacked Distribution
-        run: Compress-Archive -Path "release\win-unpacked\*" -DestinationPath "release\Horizon-1.1.0-win-unpacked.zip" -Force
         shell: pwsh
         run: |
           $ver = node -p "require('./package.json').version"
@@ -48,7 +47,6 @@ jobs:
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: horizon-windows-1.1.0
           name: horizon-windows
           retention-days: 14
           path: |
@@ -62,7 +60,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF.Substring(10) } else { "v1.1.0" }
           $pkgVer = node -p "'v' + require('./package.json').version"
           $tag = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF.Substring(10) } else { $pkgVer }
           $files = (Get-Item release/*.exe, release/*.zip).FullName
@@ -94,7 +91,6 @@ jobs:
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: horizon-macos-1.1.0
           name: horizon-macos
           retention-days: 14
           path: |
@@ -109,7 +105,6 @@ jobs:
         run: |
           PKG_VER="v$(node -p "require('./package.json').version")"
           TAG="${GITHUB_REF#refs/tags/}"
-          [ "$TAG" = "$GITHUB_REF" ] && TAG="v1.1.0"
           [ "$TAG" = "$GITHUB_REF" ] && TAG="$PKG_VER"
           gh release upload "$TAG" release/*.dmg release/*.zip --clobber
 
