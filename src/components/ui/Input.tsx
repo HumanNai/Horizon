@@ -1,4 +1,5 @@
 import React, { useState, useRef, useImperativeHandle } from 'react'
+import React, { useState, useRef } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -19,8 +20,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ label, er
     localRef.current = node
     if (typeof ref === 'function') {
       ref(node)
-    } else if (ref) {
-      ;(ref as React.MutableRefObject<HTMLInputElement | null>).current = node
+    } else if (ref && 'current' in ref) {
+      (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;
     }
   }
 

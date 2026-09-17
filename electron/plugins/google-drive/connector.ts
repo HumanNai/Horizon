@@ -88,10 +88,10 @@ export class GoogleDriveConnector implements BackendProvider {
 
     // Interactive OAuth 2.0 Loopback flow
     return new Promise<string>((resolve, reject) => {
-      let server: http.Server;
       const port = 8585;
       const redirectUri = `http://127.0.0.1:${port}`;
 
+      let server: http.Server | null = null;
       const timeout = setTimeout(() => {
         try { server?.close(); } catch (_) {}
         reject(new Error('Google Drive authentication timed out after 3 minutes.'));
