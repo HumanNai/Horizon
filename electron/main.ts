@@ -91,7 +91,7 @@ function createWindow(): BrowserWindow {
 
 /** Seed default accounts (SuperAdmin & ProductOwner) if missing */
 function seedDefaultUser() {
-  const bcrypt = require('bcrypt');
+  const bcrypt = require('bcryptjs');
   const existingSuper = db.prepare("SELECT id FROM users WHERE role = 'SuperAdmin' OR username = 'superadmin'").get() as any;
   if (!existingSuper) {
     const hash = bcrypt.hashSync('horizon123', 10);

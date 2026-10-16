@@ -1,6 +1,6 @@
 import { IpcMain } from 'electron';
 import Database from 'better-sqlite3';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { IPC, SessionInfo, HorizonUser, LoginRequest } from '../../src/types';
 import { PluginHost } from '../plugins/plugin-host';

@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import Database from 'better-sqlite3';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { runMigrations } from '../electron/db/migrations';
 import { PluginHost } from '../electron/plugins/plugin-host';
 import { pluginLogger } from '../electron/plugins/logger';
