@@ -65,10 +65,26 @@ Horizon provides pluggable, unified cloud synchronization with automatic delta-t
 * **Emergency Contacts & Skill Tags**: Centralized technical expertise directory.
 * **Configurable Notification Windows**: Customizable lookahead lead time for release milestones and cutover alerts.
 
-### 7. 🛡️ Role-Based Access Control (RBAC)
-* **Product Owner (ProductOwner)**: Full administrative governance, credential management, plugin configuration, and audit log inspection.
-* **Management (Management)**: Executive dashboard metrics, release roadmaps, and blocker oversight.
-* **Team Member (TeamMember)**: Focused access to assigned tasks, product specifications, and test cases.
+### 7. 🕸️ Integration Mapping (Visual Service Graph)
+* **Interactive Architecture Graph**: High-performance dependency canvas powered by React Flow with custom node rendering, animated protocol edges, and auto-layout.
+* **Excel-Driven Workflow**: Download a standardized `.xlsx` template, document integrations (Nodes, Edges, Groups), and import directly into Horizon.
+* **Multi-Dimensional Filters**: Live filtering by Environment (Prod, UAT, Dev), Criticality (High, Medium, Low), and Protocol (REST, Kafka, gRPC, MQ, SFTP, DB Link).
+* **Deep Service Inspection**: Click any node or edge to inspect inbound/outbound dependencies, data formats, team owners, and operational status.
+* **State Persistence**: Drag-and-drop node positioning with automatic canvas coordinate persistence.
+
+### 8. 🌐 Dual-Mode Deployment (Desktop & Hosted Web Edition)
+* **Cross-Platform Desktop Application**: Native frameless window experience for Windows and macOS.
+* **Self-Hosted Web Edition**: Standalone Express server with browser HTTP bridge allowing teams to access Horizon from any web browser (`http://localhost:3000`).
+* **Pluggable Database Engine**: Runs out-of-the-box on embedded SQLite WAL with zero external database dependencies, or connects seamlessly to MongoDB Atlas for cloud scale.
+* **1-Click Containerization**: Multi-stage `Dockerfile` and `docker-compose.yml` for instant cloud VM and Kubernetes deployment.
+
+### 9. 🛡️ Enterprise RBAC & Microsoft Entra ID (Azure AD) SSO
+* **Super Admin (SuperAdmin)**: Complete authority over the entire instance, exclusive ownership of plugin integrations, infrastructure backends, and user governance.
+* **Product Owner (ProductOwner)**: Workspace administration, product lifecycle, release sign-offs, and team management.
+* **Product Lead (ProductLead)**: Sprint and technical delivery ownership, architecture runbooks, and task oversight.
+* **Management (Management)**: Executive dashboard oversight, blocker escalations, and velocity metrics.
+* **Team Member (TeamMember)**: Day-to-day task execution, specification reviews, and test case runs.
+* **Microsoft Entra ID (Azure AD) Single Sign-On**: Full confidential client integration with automated security group-to-role mappings (`groupSuperAdmin`, `groupProductOwner`, `groupProductLead`, `groupManagement`).
 
 ---
 
@@ -78,40 +94,41 @@ Horizon provides pluggable, unified cloud synchronization with automatic delta-t
 flowchart TB
     subgraph UI["🖥️ Presentation Layer (React 18 Renderer)"]
         direction TB
-        AppView["Application Views & Modules<br/><i>(Dashboard · Products · Releases · Tasks · UAT · Secrets)</i>"]
-        StateManagement["State Management & Data Clients<br/><i>(Zustand Stores · dbClient · Custom React Hooks)</i>"]
-        Components["UI Component System<br/><i>(Tailwind CSS · Lucide Icons · Recharts · Kanban Board)</i>"]
+        AppView["Application Views & Workspaces<br/><i>(Dashboard · Products · Releases · Tasks · UAT · Secrets · Integration Mapping)</i>"]
+        StateManagement["State Management & Unified Client<br/><i>(Zustand Stores · dbClient · Custom React Hooks)</i>"]
+        Components["UI Component System & Canvas<br/><i>(Tailwind CSS · Lucide Icons · Recharts · React Flow · Kanban)</i>"]
         AppView --> StateManagement
         StateManagement --> Components
     end
 
-    subgraph Bridge["🔒 Secure Boundary (Preload Bridge)"]
+    subgraph Bridges["🔒 Dual Runtime Bridge Layer"]
         direction LR
-        ContextBridge["window.horizon ContextBridge<br/><i>(contextIsolation: true · nodeIntegration: false)</i>"]
-        IPCRoutes["Typed IPC Channels<br/><i>(auth · db · secrets · sync · plugins · notify)</i>"]
-        ContextBridge <--> IPCRoutes
+        ContextBridge["Desktop IPC Bridge<br/><i>(contextIsolation: true · nodeIntegration: false)</i>"]
+        WebBridge["Web HTTP Bridge<br/><i>(REST /api/* · Session Bearer Tokens · CORS)</i>"]
     end
 
-    subgraph MainProcess["⚙️ Core Engine (Electron Main Process)"]
+    subgraph CoreEngine["⚙️ Backend Engines (Desktop Main Process & Hosted Web Server)"]
         direction TB
-        MainApp["Main Process Lifecycle & Window Manager"]
-        SQLite[("Local SQLite Database<br/><i>WAL Mode · In-Memory Temp Store</i>")]
+        Runtime["Runtime Host<br/><i>(Electron Main Process  ·  Express 5 Web Server)</i>"]
+        SQLite[("Pluggable Database Engine<br/><i>SQLite WAL (Embedded Default)  ·  MongoDB Atlas</i>")]
         Vault["Cryptographic Vault Engine<br/><i>AES-256-GCM · PBKDF2-SHA256</i>"]
-        SyncAgent["Background Delta Sync Agent<br/><i>3-Min Interval · Mutation Queue · Conflict Resolver</i>"]
-        PluginHost["Pluggable Connector Registry"]
+        SyncAgent["Background Delta Sync Agent<br/><i>Mutation Queue · Conflict Resolver</i>"]
+        PluginHost["Plugin & Connector Registry<br/><i>(SuperAdmin Governance)</i>"]
 
+        P_AAD["Microsoft Entra ID (Azure AD) SSO"]
         P_SP["SharePoint Online Connector"]
         P_OD["OneDrive Connector"]
         P_GD["Google Drive Connector"]
         P_MG["MongoDB / GridFS Connector"]
         P_AKV["Azure Key Vault Connector"]
 
-        MainApp --> SQLite
-        MainApp --> PluginHost
+        Runtime --> SQLite
+        Runtime --> PluginHost
         Vault <--> SQLite
         SyncAgent <--> SQLite
         SyncAgent <--> PluginHost
 
+        PluginHost --> P_AAD
         PluginHost --> P_SP
         PluginHost --> P_OD
         PluginHost --> P_GD
@@ -120,6 +137,7 @@ flowchart TB
     end
 
     subgraph Cloud["☁️ External Cloud Storage & Identity"]
+        C_AAD[("Microsoft Entra ID / Azure AD<br/><i>OAuth2 PKCE & Security Groups</i>")]
         C_SP[("Microsoft SharePoint Online<br/><i>Enterprise Lists & Libraries</i>")]
         C_OD[("Microsoft OneDrive<br/><i>Personal / Business Storage</i>")]
         C_GD[("Google Drive<br/><i>Docs & Datasets via Loopback OAuth</i>")]
@@ -127,9 +145,12 @@ flowchart TB
         C_AKV[("Azure Key Vault<br/><i>Hardware Security Modules (HSM)</i>")]
     end
 
-    StateManagement <===> ContextBridge
-    IPCRoutes <===> MainApp
+    StateManagement <===>|"window.horizon (Electron)"| ContextBridge
+    StateManagement <===>|"HTTP Fetch (Browser)"| WebBridge
+    ContextBridge <===> Runtime
+    WebBridge <===> Runtime
 
+    P_AAD <==>|"MSAL / Graph"| C_AAD
     P_SP <==>|"REST / MSAL"| C_SP
     P_OD <==>|"Graph API"| C_OD
     P_GD <==>|"v3 API / Loopback"| C_GD
@@ -142,8 +163,8 @@ flowchart TB
     classDef cloudLayer fill:#162040,stroke:#10b981,stroke-width:2px,color:#ffffff;
 
     class UI uiLayer;
-    class Bridge bridgeLayer;
-    class MainProcess mainLayer;
+    class Bridges bridgeLayer;
+    class CoreEngine mainLayer;
     class Cloud cloudLayer;
 ```
 
@@ -156,7 +177,7 @@ flowchart TB
 * **npm**: v9.0.0 or higher
 * **Git**: Installed and configured
 
-### Installation & Development
+### Installation & Setup
 
 1. **Clone the repository:**
    ```bash
@@ -169,16 +190,55 @@ flowchart TB
    npm install
    ```
 
-3. **Start in development mode:**
-   ```bash
-   npm run dev
-   ```
+### 🖥️ Running the Desktop Application
 
-### Default Bootstrap Credentials
-Upon fresh initialization, Horizon creates an offline bootstrap administrator account:
-* **Username**: `admin`
-* **Password**: `horizon123`
-*(Make sure to change this password in the Access / Settings section upon first login).*
+* **Development Mode** (Hot Module Replacement for UI & Main process):
+  ```bash
+  npm run dev
+  ```
+* **Production Desktop Launch**:
+  ```bash
+  npm start
+  ```
+
+### 🌐 Running the Self-Hosted Web Edition
+
+Horizon can be hosted on any virtual machine, cloud container, or local server:
+
+* **Start Web Server**:
+  ```bash
+  npm run server
+  # Horizon will be live at http://localhost:3000
+  ```
+* **Build UI & Start Web Server** (Production compile + host):
+  ```bash
+  npm run host
+  ```
+
+### 🐳 Running via Docker
+
+Deploy Horizon with zero configuration using Docker Compose:
+
+```bash
+# Start container in detached mode
+docker-compose up -d
+
+# Check server logs
+docker-compose logs -f
+```
+
+> [!TIP]
+> **Pluggable Database Configuration**: By default, Horizon persists data in local SQLite WAL storage at `userData/horizon.db`. To connect to a cloud database, simply provide `MONGODB_URI` in your `.env` or container environment.
+
+### 🔑 Default Bootstrap Credentials
+Upon fresh initialization, Horizon provisions two default administrator accounts:
+
+| Username | Default Password | Role | Permissions |
+| :--- | :--- | :--- | :--- |
+| **`superadmin`** | `horizon123` | `SuperAdmin` | Full instance governance, exclusive plugin & connector management, user access control. |
+| **`admin`** | `horizon123` | `ProductOwner` | Product workspaces, releases, sprint tasks, UAT sign-offs, and integration mapping. |
+
+*(Make sure to change these passwords in the Access / Settings section upon first login).*
 
 ---
 
@@ -316,8 +376,9 @@ flowchart TB
 ├── build/                    # Packaging assets & executable icons
 ├── electron/                 # Electron main process source
 │   ├── db/                   # SQLite schema, migrations, and table definitions
-│   ├── ipc/                  # Typed IPC handlers (auth, db, secrets, sync, notify)
-│   ├── plugins/              # Multi-cloud storage adapters
+│   ├── ipc/                  # Typed IPC handlers (auth, db, secrets, sync, notify, integration)
+│   ├── plugins/              # Multi-cloud storage & identity adapters
+│   │   ├── azure-ad/         # Microsoft Entra ID (Azure AD) SSO connector
 │   │   ├── azure-keyvault/   # Azure Key Vault connector
 │   │   ├── google-drive/     # Google Drive v3 connector
 │   │   ├── mongodb/          # MongoDB Atlas & GridFS connector
@@ -326,16 +387,24 @@ flowchart TB
 │   ├── main.ts               # Main process bootstrap & lifecycle
 │   └── preload.ts            # Secure context bridge API
 ├── images/                   # App logos & branding graphics
+├── public/                   # Static assets & downloadable templates
+│   └── templates/            # Integration mapping Excel template (.xlsx)
+├── server/                   # Self-hosted web edition backend
+│   ├── index.ts              # Express 5 REST API & static server
+│   └── start.js              # Unified runner with shared native ABI
 ├── src/                      # React 18 frontend
+│   ├── api/                  # Unified webBridge for browser HTTP routing
 │   ├── assets/               # Bundled UI images
 │   ├── components/           # Reusable UI component library & layouts
-│   ├── hooks/                # Custom React hooks (sync, notifications)
-│   ├── layouts/              # AppShell layout with custom titlebar
-│   ├── pages/                # Application views (Dashboard, Products, Releases, Secrets...)
+│   ├── hooks/                # Custom React hooks (sync, notifications, window controls)
+│   ├── layouts/              # AppShell layout with custom titlebar & RBAC
+│   ├── pages/                # Application views (Dashboard, Products, Releases, Integration Mapping...)
 │   ├── store/                # Zustand state management stores
 │   └── types/                # Shared TypeScript domain contracts
 ├── CODE_OF_CONDUCT.md        # Contributor Covenant v2.1
 ├── CONTRIBUTING.md           # Contribution guidelines
+├── Dockerfile                # Multi-stage production container build
+├── docker-compose.yml        # 1-click cloud container orchestration
 ├── LICENSE                   # Apache License 2.0
 ├── NOTICE                    # Attribution and third-party notices
 ├── README.md                 # Project documentation

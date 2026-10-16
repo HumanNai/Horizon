@@ -1,4 +1,4 @@
-﻿# Security Policy
+# Security Policy
 
 The Horizon PM maintainers and community take the security of our application and user data extremely seriously. We appreciate the responsible disclosure of any discovered vulnerabilities.
 
@@ -10,6 +10,7 @@ Security patches and updates are applied to the latest release of Horizon PM:
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 1.1.x   | :white_check_mark: |
 | 1.0.x   | :white_check_mark: |
 | < 1.0.0 | :x:                |
 
