@@ -7,6 +7,9 @@ import { useWindowMaximize, RestoreIcon } from '../hooks/useWindowMaximize'
 import appIcon from '../assets/app_icon.png'
 
 function WindowControls() {
+  const isElectron = Boolean(typeof window !== 'undefined' && (window.navigator?.userAgent?.includes('Electron') || (window as any).process?.versions?.electron));
+  if (!isElectron) return null;
+
   const { isMaximized, toggleMaximize } = useWindowMaximize()
 
   const handle = (action: 'minimize' | 'close') => {
@@ -482,17 +485,19 @@ export function Login() {
     }
   }
 
+  const isElectron = Boolean(typeof window !== 'undefined' && (window.navigator?.userAgent?.includes('Electron') || (window as any).process?.versions?.electron));
+
   return (
     <div
       className="min-h-screen max-h-screen overflow-y-auto bg-[#0B1229] flex flex-col items-center justify-center p-3 sm:p-4 py-6 select-none custom-scrollbar"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      style={isElectron ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
     >
       {/* Window controls — always visible since there's no OS titlebar */}
       <WindowControls />
 
       <div
         className="w-full max-w-md my-auto"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        style={isElectron ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
       >
         {/* Logo + branding */}
         <div className="flex flex-col items-center mb-4 sm:mb-6">

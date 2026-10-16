@@ -256,7 +256,8 @@ export function AppShell() {
   ]
 
 
-  const isMac = (window as any).horizon?.platform === 'darwin'
+  const isElectron = Boolean(typeof window !== 'undefined' && (window.navigator?.userAgent?.includes('Electron') || (window as any).process?.versions?.electron))
+  const isMac = isElectron && (window as any).horizon?.platform === 'darwin'
 
   const handleWindowAction = (action: 'minimize' | 'maximize' | 'close') => {
     (window as any).horizon?.window?.[action]?.()
@@ -574,7 +575,7 @@ export function AppShell() {
             </div>
             
             {/* Custom Frameless Window Controls (Windows / Linux only) */}
-            {!isMac && (
+            {isElectron && !isMac && (
               <div className="flex items-center gap-0.5 border-l border-[#15203D] pl-1.5 sm:pl-2.5 ml-0.5 shrink-0">
                 <button 
                   onClick={() => handleWindowAction('minimize')} 

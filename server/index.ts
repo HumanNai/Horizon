@@ -522,7 +522,7 @@ app.use(express.static(clientDist));
 app.use('/templates', express.static(path.join(process.cwd(), 'public', 'templates')));
 
 // SPA Fallback for client-side routing
-app.get('*', (req: Request, res: Response) => {
+app.use((req: Request, res: Response) => {
   const indexHtml = path.join(clientDist, 'index.html');
   if (fs.existsSync(indexHtml)) {
     res.sendFile(indexHtml);

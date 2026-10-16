@@ -173,16 +173,16 @@ export function setupWebBridge(): void {
     },
 
     window: {
-      minimize: () => {},
+      minimize: () => Promise.resolve(),
       maximize: () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          return document.documentElement.requestFullscreen().then(() => true).catch(() => false);
         } else {
-          document.exitFullscreen().catch(() => {});
+          return document.exitFullscreen().then(() => false).catch(() => false);
         }
       },
-      close: () => {},
-      isMaximized: () => Boolean(document.fullscreenElement),
+      close: () => Promise.resolve(),
+      isMaximized: () => Promise.resolve(Boolean(document.fullscreenElement)),
       onMaximizeChange: (callback: (isMax: boolean) => void) => {
         const handler = () => callback(Boolean(document.fullscreenElement));
         document.addEventListener('fullscreenchange', handler);

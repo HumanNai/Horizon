@@ -11,12 +11,19 @@ export function useWindowMaximize() {
     const horizonWindow = (window as any).horizon?.window;
     if (!horizonWindow) return;
 
-    // Check initial state
-    horizonWindow.isMaximized?.().then((max: boolean) => {
-      if (typeof max === 'boolean') {
-        setIsMaximized(max);
+    // Check initial state safely
+    try {
+      const res = horizonWindow.isMaximized?.();
+      if (res && typeof res.then === 'function') {
+        res.then((max: boolean) => {
+          if (typeof max === 'boolean') {
+            setIsMaximized(max);
+          }
+        }).catch(() => {});
+      } else if (typeof res === 'boolean') {
+        setIsMaximized(res);
       }
-    }).catch(() => {});
+    } catch (_) {}
 
     // Listen to maximize and unmaximize events from main process
     const unsubscribe = horizonWindow.onMaximizeChange?.((max: boolean) => {
