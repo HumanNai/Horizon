@@ -153,7 +153,9 @@ export function Access() {
     }
   }
 
-  if (currentUser?.role !== 'ProductOwner') {
+  const isSuperAdmin = currentUser?.role === 'SuperAdmin'
+
+  if (currentUser?.role !== 'ProductOwner' && currentUser?.role !== 'SuperAdmin') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center max-w-sm mx-auto">
         <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
@@ -161,7 +163,7 @@ export function Access() {
         </div>
         <h2 className="text-xl font-bold text-white mb-1">Access Restricted</h2>
         <p className="text-xs text-gray-400 leading-relaxed">
-          Role-Based Access Control (RBAC) administration is reserved exclusively for the Product Owner role.
+          Role-Based Access Control (RBAC) administration is reserved for Product Owners and Super Administrators.
         </p>
       </div>
     )
@@ -292,12 +294,14 @@ export function Access() {
                 </td>
                 <td className="p-4">
                   <Badge variant={
+                    u.role === 'SuperAdmin' ? 'danger' :
                     u.role === 'ProductOwner' ? 'orange' :
                     u.role === 'ProductLead' ? 'warning' :
                     u.role === 'Management' ? 'success' :
                     'blue'
                   }>
-                    {u.role === 'ProductOwner' ? 'Product Owner' :
+                    {u.role === 'SuperAdmin' ? 'Super Admin' :
+                     u.role === 'ProductOwner' ? 'Product Owner' :
                      u.role === 'ProductLead' ? 'Product Lead' :
                      u.role === 'Management' ? 'Upper Management' :
                      'Team Member'}
@@ -458,6 +462,7 @@ export function Access() {
             value={role}
             onChange={e => setRole(e.target.value as UserRole)}
             options={[
+              ...(isSuperAdmin ? [{ label: 'Super Admin (Full Platform Authority — Use with care)', value: 'SuperAdmin' }] : []),
               { label: 'Product Owner (Full Administrative Authority across organization)', value: 'ProductOwner' },
               { label: 'Product Lead (Product-Level Authority & Sprint Management)', value: 'ProductLead' },
               { label: 'Team Member (Sprint Execution & Tasks)', value: 'TeamMember' },

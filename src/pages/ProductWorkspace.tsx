@@ -57,6 +57,7 @@ import { dbQuery, dbExecute, getSessionToken, triggerAssignmentNotification } fr
 import { useAuthStore } from '../store/authStore'
 import { IconPicker, isImageIcon } from '../components/IconPicker'
 import { useSettingsStore } from '../store/settingsStore'
+import { IntegrationMapping } from './IntegrationMapping'
 
 interface CustomSection {
   id: string
@@ -2108,6 +2109,7 @@ export function ProductWorkspace() {
           { id: 'uat', label: `Quality Gate (${uatCases.length})`, icon: CheckCircle2 },
           { id: 'interfaces', label: `Interfaces (${interfaces.length})`, icon: Network },
           { id: 'apis', label: `APIs (${apis.length})`, icon: Terminal },
+          { id: 'integration-mapping', label: 'Integration Map', icon: Network },
           ...(!isTeamMember && !isManagement ? [{ 
             id: 'secrets', 
             label: `Secrets Vault${akvStatus?.connected ? ` (${allAvailableSecrets.length})` : ''}`, 
@@ -3262,6 +3264,17 @@ export function ProductWorkspace() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Integration Architecture & Service Mapping */}
+      {activeTab === 'integration-mapping' && (
+        <div className="h-[calc(100vh-210px)] min-h-[600px] border border-[#1E2D52] rounded-2xl overflow-hidden shadow-2xl">
+          <IntegrationMapping 
+            productId={productId!} 
+            productName={product?.name} 
+            embeddedMode={true} 
+          />
         </div>
       )}
 

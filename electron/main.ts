@@ -12,6 +12,7 @@ import { registerGraphHandlers } from './ipc/graph';
 import { registerOneDriveHandlers } from './ipc/onedrive';
 import { registerGoogleDriveHandlers } from './ipc/gdrive';
 import { registerSyncHandlers, startSyncAgent } from './ipc/sync';
+import { registerIntegrationHandlers } from './ipc/integration';
 import { PluginHost, registerPluginHandlers } from './plugins/plugin-host';
 import { pluginLogger } from './plugins/logger';
 import { IPC } from '../src/types';
@@ -88,11 +89,21 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-/** Seed default Product Owner account if empty */
+/** Seed default accounts (SuperAdmin & ProductOwner) if missing */
 function seedDefaultUser() {
-  const existing = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
-  if (existing.cnt === 0) {
-    const bcrypt = require('bcrypt');
+  const bcrypt = require('bcrypt');
+  const existingSuper = db.prepare("SELECT id FROM users WHERE role = 'SuperAdmin' OR username = 'superadmin'").get() as any;
+  if (!existingSuper) {
+    const hash = bcrypt.hashSync('horizon123', 10);
+    const saId = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO users (id, username, password_hash, display_name, role, active, avatar_initials, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(saId, 'superadmin', hash, 'Super Administrator', 'SuperAdmin', 'SA');
+  }
+
+  const existingPO = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as any;
+  if (!existingPO) {
     const hash = bcrypt.hashSync('horizon123', 10);
     const adminId = crypto.randomUUID();
     db.prepare(`
@@ -187,6 +198,20 @@ function cleanDummyData() {
   }
 }
 
+/** Periodic maintenance: checkpoint WAL and purge stale synced local mutations (> 30 days) */
+function runPeriodicMaintenance() {
+  try {
+    db.prepare(`
+      DELETE FROM local_mutations
+      WHERE synced = 1
+        AND datetime(created_at) < datetime('now', '-30 days')
+    `).run();
+    db.pragma('wal_checkpoint(PASSIVE)');
+  } catch (err) {
+    console.error('Periodic DB maintenance failed:', err);
+  }
+}
+
 function initApp() {
   const userDataPath = app.getPath('userData');
   const dbPath = path.join(userDataPath, 'horizon.db');
@@ -201,6 +226,7 @@ function initApp() {
   runMigrations(db);
   seedDefaultUser();
   cleanDummyData();
+  runPeriodicMaintenance();
   initScheduledNotifications(db);
 
   pluginHost = new PluginHost(db);
@@ -209,6 +235,7 @@ function initApp() {
   pluginHost.loadPlugin('google-drive-core');
   pluginHost.loadPlugin('mongodb-core');
   pluginHost.loadPlugin('azure-keyvault');
+  pluginHost.loadPlugin('azure-ad');
 
   registerAuthHandlers(ipcMain, db, pluginHost);
   registerDbHandlers(ipcMain, db);
@@ -220,6 +247,7 @@ function initApp() {
   registerGoogleDriveHandlers(ipcMain, pluginHost);
   registerSyncHandlers(ipcMain, db, pluginHost);
   registerPluginHandlers(ipcMain, db, pluginHost);
+  registerIntegrationHandlers(ipcMain, db);
 
   // Window controls (frameless)
   ipcMain.handle(IPC.WINDOW_MINIMIZE, () => mainWindow?.minimize());
@@ -320,11 +348,15 @@ app.whenReady().then(() => {
   });
 });
 
+app.on('before-quit', () => {
+  try {
+    db?.pragma('wal_checkpoint(TRUNCATE)');
+    db?.close();
+  } catch (_) {}
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    try {
-      db?.close();
-    } catch {}
     app.exit(0);
   }
 });

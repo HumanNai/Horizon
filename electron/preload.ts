@@ -111,6 +111,14 @@ const horizonAPI = {
         ipcRenderer.removeListener(IPC.WINDOW_MAXIMIZE_CHANGE, handler);
       };
     }
+  },
+  integrationMapping: {
+    listMaps: (token: string, productId: string) => ipcRenderer.invoke(IPC.INTEGRATION_LIST_MAPS, token, productId),
+    createMap: (token: string, data: { productId: string; name: string; description?: string }) => ipcRenderer.invoke(IPC.INTEGRATION_CREATE_MAP, token, data),
+    deleteMap: (token: string, mapId: string) => ipcRenderer.invoke(IPC.INTEGRATION_DELETE_MAP, token, mapId),
+    getMapData: (token: string, mapId: string) => ipcRenderer.invoke(IPC.INTEGRATION_GET_MAP_DATA, token, mapId),
+    importExcel: (token: string, payload: { mapId: string; nodes: any[]; edges: any[]; groups?: any[] }) => ipcRenderer.invoke(IPC.INTEGRATION_IMPORT_EXCEL, token, payload),
+    savePositions: (token: string, positions: Array<{ id?: string; nodeKey?: string; posX: number; posY: number; mapId: string }>) => ipcRenderer.invoke(IPC.INTEGRATION_SAVE_POSITIONS, token, positions)
   }
 };
 

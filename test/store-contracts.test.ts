@@ -52,3 +52,4 @@ describe('Horizon IPC Contracts & Types Integrity Test Suite', () => {
     }
   });
 });
+

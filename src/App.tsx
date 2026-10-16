@@ -24,6 +24,7 @@ const Plugins = lazy(() => import('./pages/Plugins').then(m => ({ default: m.Plu
 const Access = lazy(() => import('./pages/Access').then(m => ({ default: m.Access })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const ProductWorkspace = lazy(() => import('./pages/ProductWorkspace').then(m => ({ default: m.ProductWorkspace })))
+const IntegrationMappingPage = lazy(() => import('./pages/IntegrationMapping').then(m => ({ default: m.IntegrationMappingPage })))
 
 function PageLoading() {
   return (
@@ -83,6 +84,7 @@ export default function App() {
             <Route path="plugins" element={<Suspense fallback={<PageLoading />}><Plugins /></Suspense>} />
             <Route path="access" element={<Suspense fallback={<PageLoading />}><Access /></Suspense>} />
             <Route path="settings" element={<Suspense fallback={<PageLoading />}><Settings /></Suspense>} />
+            <Route path="integration-mapping" element={<Suspense fallback={<PageLoading />}><IntegrationMappingPage /></Suspense>} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>

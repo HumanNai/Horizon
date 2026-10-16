@@ -9,6 +9,7 @@ import { OneDriveConnector } from './onedrive/connector';
 import { GoogleDriveConnector } from './google-drive/connector';
 import { MongoDBConnector } from './mongodb/connector';
 import { AzureKeyVaultConnector } from './azure-keyvault/connector';
+import { AzureADConnector } from './azure-ad/connector';
 import { pluginLogger } from './logger';
 
 export class PluginHost {
@@ -18,6 +19,7 @@ export class PluginHost {
   private gdriveConnectors = new Map<string, GoogleDriveConnector>();
   private mongoConnectors = new Map<string, MongoDBConnector>();
   private akvConnectors = new Map<string, AzureKeyVaultConnector>();
+  private aadConnectors = new Map<string, AzureADConnector>();
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -178,6 +180,10 @@ export class PluginHost {
         const connector = new AzureKeyVaultConnector(config);
         this.akvConnectors.set(pluginId, connector);
         return config;
+      } else if (pluginId === 'azure-ad') {
+        const connector = new AzureADConnector(config);
+        this.aadConnectors.set(pluginId, connector);
+        return config;
       }
     }
     return null;
@@ -244,12 +250,23 @@ export class PluginHost {
     return connector;
   }
 
+  getAzureADConnector(): AzureADConnector {
+    let connector = this.aadConnectors.get('azure-ad');
+    if (!connector) {
+      this.loadPlugin('azure-ad');
+      connector = this.aadConnectors.get('azure-ad');
+    }
+    if (!connector) throw new Error('Azure AD SSO Connector is not configured or initialized.');
+    return connector;
+  }
+
   getConnector(pluginId: string): any {
     if (pluginId === 'sharepoint-core') return this.getSharePointConnector();
     if (pluginId === 'onedrive-core') return this.getOneDriveConnector();
     if (pluginId === 'google-drive-core') return this.getGoogleDriveConnector();
     if (pluginId === 'mongodb-core') return this.getMongoConnector();
     if (pluginId === 'azure-keyvault') return this.getAzureKeyVaultConnector();
+    if (pluginId === 'azure-ad') return this.getAzureADConnector();
     throw new Error(`Unknown plugin connector: ${pluginId}`);
   }
 
@@ -300,7 +317,7 @@ export class PluginHost {
       });
     }
 
-    const defaultPlugins = ['sharepoint-core', 'onedrive-core', 'google-drive-core', 'mongodb-core', 'azure-keyvault'];
+    const defaultPlugins = ['sharepoint-core', 'onedrive-core', 'google-drive-core', 'mongodb-core', 'azure-keyvault', 'azure-ad'];
     for (const id of defaultPlugins) {
       if (!map.has(id)) {
         map.set(id, {
@@ -516,6 +533,18 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
         `).run(connectedUser, pluginId);
 
         return { success: true, connectedAs: connectedUser };
+      } else if (pluginId === 'azure-ad') {
+        const connector = pluginHost.getAzureADConnector();
+        const testRes = await connector.testConnection();
+        if (!testRes.success) throw new Error(testRes.message);
+
+        db.prepare(`
+          UPDATE plugin_configs 
+          SET status = 'connected', connected_as = 'Entra ID Verified', connected_at = CURRENT_TIMESTAMP, error = NULL 
+          WHERE plugin_id = ?
+        `).run(pluginId);
+
+        return { success: true, connectedAs: 'Entra ID Verified' };
       }
 
       throw new Error(`Unsupported plugin for connection: ${pluginId}`);

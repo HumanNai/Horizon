@@ -37,14 +37,21 @@
     "package:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
     "package:all": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder -mw --publish never",
     "lint": "eslint src electron --ext .ts,.tsx",
-    "test": "node --experimental-strip-types --test test/*.test.ts"
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "server": "tsx server/index.ts",
+    "host": "electron-vite build && tsx server/index.ts",
+    "rebuild:node": "npm rebuild better-sqlite3 bcrypt",
+    "rebuild:electron": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@azure/msal-node": "^2.9.2",
+    "@xyflow/react": "^12.12.0",
     "axios": "^1.7.2",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^11.1.2",
+    "cors": "^2.8.6",
     "electron-squirrel-startup": "^1.0.0",
+    "express": "^5.3.0",
     "lucide-react": "^0.395.0",
     "mongodb": "^7.6.0",
     "react": "^18.3.1",
@@ -53,12 +60,15 @@
     "react-router-dom": "^6.23.1",
     "recharts": "^2.12.7",
     "uuid": "^11.0.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8",
     "zustand": "^4.5.4"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/better-sqlite3": "^7.6.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -74,6 +84,7 @@
     "eslint": "^8.57.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5",
     "vite": "^5.3.1"
   },

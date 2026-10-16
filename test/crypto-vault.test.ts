@@ -59,3 +59,4 @@ describe('Vault Cryptography AES-256-GCM & PBKDF2 Test Suite', () => {
     }, 'Decryption with mismatched key should throw authentication error');
   });
 });
+

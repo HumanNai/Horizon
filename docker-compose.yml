@@ -1,0 +1,20 @@
+services:
+  horizon-pm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: horizon-pm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - DATABASE_PATH=/app/data/horizon.db
+    volumes:
+      - horizon-data:/app/data
+
+volumes:
+  horizon-data:
+    driver: local

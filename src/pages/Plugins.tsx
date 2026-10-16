@@ -41,20 +41,20 @@ export function Plugins() {
   const [plugins, setPlugins] = useState<PluginConfig[]>([])
   const [activeBackend, setActiveBackend] = useState<string>('local')
   const [isLoginCloudLocked, setIsLoginCloudLocked] = useState(false)
-  const [pluginCategory, setPluginCategory] = useState<'all' | 'storage' | 'security' | 'diagnostics'>('all')
+  const [pluginCategory, setPluginCategory] = useState<'all' | 'storage' | 'security' | 'sso' | 'diagnostics'>('all')
   const [syncState, setSyncState] = useState<SyncState>({ status: 'offline', pendingChanges: 0 })
   const [isSyncing, setIsSyncing] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  if (currentUser?.role !== 'ProductOwner') {
+  if (currentUser?.role !== 'SuperAdmin') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center max-w-sm mx-auto">
-        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
-          <ShieldAlert size={28} />
+        <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-4">
+          <Lock size={28} />
         </div>
-        <h2 className="text-xl font-bold text-white mb-1">Access Restricted</h2>
+        <h2 className="text-xl font-bold text-white mb-1">Super Admin Access Required</h2>
         <p className="text-xs text-gray-400 leading-relaxed">
-          Cloud backend and plugin infrastructure configuration is reserved exclusively for the Product Owner role.
+          Cloud backend configuration, plugin management, and infrastructure integrations are restricted to Super Administrators only. Please contact your Super Admin to update plugin settings.
         </p>
       </div>
     )
@@ -66,6 +66,23 @@ export function Plugins() {
   const [showGdriveGuide, setShowGdriveGuide] = useState(false)
   const [showMongoGuide, setShowMongoGuide] = useState(false)
   const [showAkvGuide, setShowAkvGuide] = useState(false)
+  const [showAadGuide, setShowAadGuide] = useState(false)
+
+  // Azure AD SSO Modal State
+  const [isAadModalOpen, setIsAadModalOpen] = useState(false)
+  const [aadTenantId, setAadTenantId] = useState('')
+  const [aadClientId, setAadClientId] = useState('')
+  const [aadClientSecret, setAadClientSecret] = useState('')
+  const [showAadSecret, setShowAadSecret] = useState(false)
+  const [aadRedirectUri, setAadRedirectUri] = useState('http://localhost:5173/auth/callback')
+  const [aadGroupSuperAdmin, setAadGroupSuperAdmin] = useState('')
+  const [aadGroupProductOwner, setAadGroupProductOwner] = useState('')
+  const [aadGroupProductLead, setAadGroupProductLead] = useState('')
+  const [aadGroupManagement, setAadGroupManagement] = useState('')
+  const [aadDefaultRole, setAadDefaultRole] = useState('TeamMember')
+  const [isConnectingAad, setIsConnectingAad] = useState(false)
+  const [aadError, setAadError] = useState<string | null>(null)
+  const [showModalAadGuide, setShowModalAadGuide] = useState(false)
 
   // SharePoint Modal State
   const [isSpModalOpen, setIsSpModalOpen] = useState(false)
@@ -141,6 +158,8 @@ export function Plugins() {
   const [isMongoModalTesting, setIsMongoModalTesting] = useState(false)
   const [akvModalTestResult, setAkvModalTestResult] = useState<BackendDiagnosticResult | null>(null)
   const [isAkvModalTesting, setIsAkvModalTesting] = useState(false)
+  const [aadModalTestResult, setAadModalTestResult] = useState<BackendDiagnosticResult | null>(null)
+  const [isAadModalTesting, setIsAadModalTesting] = useState(false)
   const consoleBottomRef = React.useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -225,6 +244,19 @@ export function Plugins() {
           setAkvClientId(akv.settings.clientId || '')
           setAkvClientSecret(akv.settings.clientSecret || '')
           setAkvAuthType(akv.settings.authType || (akv.settings.clientSecret ? 'client_secret' : 'interactive'))
+        }
+
+        const aad = list.find(p => p.pluginId === 'azure-ad')
+        if (aad && aad.settings) {
+          setAadTenantId(aad.settings.tenantId || '')
+          setAadClientId(aad.settings.clientId || '')
+          setAadClientSecret(aad.settings.clientSecret || '')
+          setAadRedirectUri(aad.settings.redirectUri || 'http://localhost:5173/auth/callback')
+          setAadGroupSuperAdmin(aad.settings.groupSuperAdmin || '')
+          setAadGroupProductOwner(aad.settings.groupProductOwner || '')
+          setAadGroupProductLead(aad.settings.groupProductLead || '')
+          setAadGroupManagement(aad.settings.groupManagement || '')
+          setAadDefaultRole(aad.settings.defaultRole || 'TeamMember')
         }
       }
 
@@ -315,6 +347,41 @@ export function Plugins() {
       await loadAll()
     } catch (err) {
       console.error('Failed to disconnect Azure Key Vault:', err)
+    }
+  }
+
+  // Azure AD SSO Actions
+  const handleSaveAndConnectAad = async () => {
+    setIsConnectingAad(true)
+    setAadError(null)
+    try {
+      await (window as any).horizon.plugins.saveConfig('azure-ad', {
+        tenantId: aadTenantId.trim(),
+        clientId: aadClientId.trim(),
+        clientSecret: aadClientSecret.trim(),
+        redirectUri: aadRedirectUri.trim(),
+        groupSuperAdmin: aadGroupSuperAdmin.trim(),
+        groupProductOwner: aadGroupProductOwner.trim(),
+        groupProductLead: aadGroupProductLead.trim(),
+        groupManagement: aadGroupManagement.trim(),
+        defaultRole: aadDefaultRole
+      })
+      await (window as any).horizon.plugins.connect('azure-ad')
+      await loadAll()
+      setIsAadModalOpen(false)
+    } catch (err: any) {
+      setAadError(err.message || 'Failed to authenticate with Microsoft Entra ID')
+    } finally {
+      setIsConnectingAad(false)
+    }
+  }
+
+  const handleDisconnectAad = async () => {
+    try {
+      await (window as any).horizon.plugins.disconnect('azure-ad')
+      await loadAll()
+    } catch (err) {
+      console.error('Failed to disconnect Azure AD SSO:', err)
     }
   }
 
@@ -448,7 +515,7 @@ export function Plugins() {
     }
   }
 
-  const handleTestBackend = async (pluginId?: string, overrideSettings?: any, targetModal?: 'sp' | 'od' | 'gdrive' | 'mongo' | 'akv') => {
+  const handleTestBackend = async (pluginId?: string, overrideSettings?: any, targetModal?: 'sp' | 'od' | 'gdrive' | 'mongo' | 'akv' | 'aad') => {
     if (targetModal === 'sp') {
       setIsSpModalTesting(true)
       setSpModalTestResult(null)
@@ -464,6 +531,9 @@ export function Plugins() {
     } else if (targetModal === 'akv') {
       setIsAkvModalTesting(true)
       setAkvModalTestResult(null)
+    } else if (targetModal === 'aad') {
+      setIsAadModalTesting(true)
+      setAadModalTestResult(null)
     } else {
       setIsTestingBackend(true)
       setDiagTestResult(null)
@@ -477,6 +547,7 @@ export function Plugins() {
       else if (targetModal === 'gdrive') setGdriveModalTestResult(res)
       else if (targetModal === 'mongo') setMongoModalTestResult(res)
       else if (targetModal === 'akv') setAkvModalTestResult(res)
+      else if (targetModal === 'aad') setAadModalTestResult(res)
       else setDiagTestResult(res)
     } catch (err: any) {
       const errObj: BackendDiagnosticResult = {
@@ -494,6 +565,7 @@ export function Plugins() {
       else if (targetModal === 'gdrive') setGdriveModalTestResult(errObj)
       else if (targetModal === 'mongo') setMongoModalTestResult(errObj)
       else if (targetModal === 'akv') setAkvModalTestResult(errObj)
+      else if (targetModal === 'aad') setAadModalTestResult(errObj)
       else setDiagTestResult(errObj)
     } finally {
       if (targetModal === 'sp') setIsSpModalTesting(false)
@@ -501,6 +573,7 @@ export function Plugins() {
       else if (targetModal === 'gdrive') setIsGdriveModalTesting(false)
       else if (targetModal === 'mongo') setIsMongoModalTesting(false)
       else if (targetModal === 'akv') setIsAkvModalTesting(false)
+      else if (targetModal === 'aad') setIsAadModalTesting(false)
       else setIsTestingBackend(false)
     }
   }
@@ -536,6 +609,7 @@ export function Plugins() {
   const gdriveConfig = plugins.find(p => p.pluginId === 'google-drive-core')
   const mongoConfig = plugins.find(p => p.pluginId === 'mongodb-core')
   const akvConfig = plugins.find(p => p.pluginId === 'azure-keyvault')
+  const aadConfig = plugins.find(p => p.pluginId === 'azure-ad')
 
   const getActiveBackendLabel = () => {
     if (activeBackend === 'sharepoint-core' && spConfig?.status === 'connected') return 'Microsoft SharePoint (Cloud Sync Active)'
@@ -674,7 +748,7 @@ export function Plugins() {
               : 'text-gray-400 hover:text-white hover:bg-[#15203D]'
           }`}
         >
-          All Integrations (6)
+          All Integrations (7)
         </button>
         <button
           onClick={() => setPluginCategory('storage')}
@@ -695,6 +769,16 @@ export function Plugins() {
           }`}
         >
           <KeyRound size={14} /> Security & HSM Vaults (1)
+        </button>
+        <button
+          onClick={() => setPluginCategory('sso')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            pluginCategory === 'sso'
+              ? 'bg-[#2E5EFF] text-white shadow-lg shadow-[#2E5EFF]/20'
+              : 'text-gray-400 hover:text-white hover:bg-[#15203D]'
+          }`}
+        >
+          <ShieldCheck size={14} /> Identity & Access (SSO) (1)
         </button>
         <button
           onClick={() => setPluginCategory('diagnostics')}
@@ -1473,6 +1557,125 @@ export function Plugins() {
           </div>
         </div>
         )}
+
+        {/* Provider 5: Microsoft Entra ID (Azure AD SSO) */}
+        {(pluginCategory === 'all' || pluginCategory === 'sso') && (
+        <div className="rounded-2xl bg-[#0A1024]/95 border border-[#15203D] hover:border-sky-500/40 transition-all p-6 flex flex-col justify-between shadow-2xl relative overflow-hidden">
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-12 h-12 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+                <ShieldCheck size={24} />
+              </div>
+              <Badge variant={aadConfig?.status === 'connected' ? 'success' : aadConfig?.status === 'error' ? 'danger' : 'neutral'}>
+                {aadConfig?.status === 'connected' ? 'SSO Active' : aadConfig?.status === 'error' ? 'Error' : 'Disabled'}
+              </Badge>
+            </div>
+
+            <h3 className="text-lg font-bold text-white mb-1">Microsoft Entra ID (SSO)</h3>
+            <p className="text-xs text-gray-400 leading-relaxed mb-4">
+              Enterprise Single Sign-On (SSO) & RBAC. Authenticate users via Microsoft Entra ID and map security groups directly to Horizon roles.
+            </p>
+
+            {aadConfig?.status === 'connected' && (
+              <div className="text-[11px] text-sky-300 bg-sky-500/10 border border-sky-500/20 p-2.5 rounded-xl mb-3 font-mono truncate">
+                ✓ SSO Provider: Microsoft Entra ID Verified
+              </div>
+            )}
+
+            {aadConfig?.status === 'error' && aadConfig.error && (
+              <div className="text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl mb-3 font-mono truncate">
+                ⚠ {aadConfig.error}
+              </div>
+            )}
+
+            {/* Expandable Step-by-Step Connection Guide */}
+            <div className="mb-4">
+              <button
+                onClick={() => setShowAadGuide(!showAadGuide)}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#070B19] hover:bg-[#0D152E] border border-[#19264A] text-xs font-semibold text-gray-300 transition-colors text-left"
+              >
+                <span className="flex items-center gap-1.5 text-sky-400">
+                  <BookOpen size={14} /> How to configure Entra ID SSO
+                </span>
+                {showAadGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {showAadGuide && (
+                <div className="mt-2.5 p-3 rounded-xl bg-[#070B19] border border-[#19264A] text-[11px] text-gray-300 space-y-2.5 animate-fadeIn max-h-72 overflow-y-auto custom-scrollbar overflow-x-hidden">
+                  <div className="font-bold text-sky-400 border-b border-[#1E2D52] pb-1">
+                    Azure AD / Microsoft Entra ID SSO Setup:
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-start min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                      <div className="min-w-0 flex-1 break-words">
+                        <span>Open </span>
+                        <a href="https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps" target="_blank" rel="noreferrer" className="text-sky-400 underline inline-flex items-center gap-0.5">
+                          Azure Portal &rarr; Entra ID &rarr; App registrations <ExternalLink size={10} />
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 items-start min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                      <div className="min-w-0 flex-1 break-words">Create a New Registration (e.g. <em>Horizon PM SSO</em>). In <strong>Redirect URI</strong> (Web), add your callback URL (e.g. <code className="text-gray-200">http://localhost:5173/auth/callback</code> or production domain).</div>
+                    </div>
+
+                    <div className="flex gap-2 items-start min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                      <div className="min-w-0 flex-1 break-words">Copy <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from the app Overview page.</div>
+                    </div>
+
+                    <div className="flex gap-2 items-start min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">4</span>
+                      <div className="min-w-0 flex-1 break-words">Under <strong>Certificates & secrets</strong>, create a Client Secret and copy its Value.</div>
+                    </div>
+
+                    <div className="flex gap-2 items-start min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">5</span>
+                      <div className="min-w-0 flex-1 break-words">In <strong>API permissions</strong>, add <em>User.Read</em> and <em>GroupMember.Read.All</em>.</div>
+                    </div>
+
+                    <div className="flex gap-2 items-start min-w-0">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">6</span>
+                      <div className="min-w-0 flex-1 break-words">Specify security group mappings for SuperAdmin, ProductOwner, ProductLead, or Management roles.</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1 text-xs text-gray-400 mb-4">
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                <span>Protocol: MSAL OpenID Connect & OAuth2</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                <span>RBAC: Entra Security Groups &rarr; Horizon Roles</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-[#15203D] flex flex-col gap-2">
+            {aadConfig?.status === 'connected' ? (
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="sm" onClick={handleDisconnectAad} className="text-red-400 hover:text-red-300 text-xs">
+                  Disable SSO
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setIsAadModalOpen(true)} className="text-xs">
+                  Reconfigure
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" onClick={() => setIsAadModalOpen(true)} className="w-full gap-2 bg-sky-600 hover:bg-sky-500">
+                Connect Entra ID SSO <ArrowRight size={14} />
+              </Button>
+            )}
+          </div>
+        </div>
+        )}
       </div>
 
       {/* System Diagnostics & Live Connection Console */}
@@ -1510,6 +1713,7 @@ export function Plugins() {
                 <option value="google-drive-core" className="bg-[#0A1024] text-white">Google Drive</option>
                 <option value="mongodb-core" className="bg-[#0A1024] text-white">MongoDB Enterprise</option>
                 <option value="azure-keyvault" className="bg-[#0A1024] text-white">Azure Key Vault (Secrets)</option>
+                <option value="azure-ad" className="bg-[#0A1024] text-white">Microsoft Entra ID (SSO)</option>
               </select>
             </div>
 
@@ -2345,6 +2549,192 @@ export function Plugins() {
             <p className="text-[11px] text-gray-500">
               Used for confidential client machine-to-machine authentication against Azure Key Vault REST API.
             </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal 5: Microsoft Entra ID (Azure AD SSO) Setup Wizard */}
+      <Modal
+        isOpen={isAadModalOpen}
+        onClose={() => {
+          setIsAadModalOpen(false)
+          setAadModalTestResult(null)
+          setAadError(null)
+        }}
+        title="Configure Microsoft Entra ID (Azure AD) SSO"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <Button 
+              variant="secondary" 
+              onClick={() => handleTestBackend('azure-ad', {
+                tenantId: aadTenantId.trim(),
+                clientId: aadClientId.trim(),
+                clientSecret: aadClientSecret.trim(),
+                redirectUri: aadRedirectUri.trim()
+              }, 'aad')} 
+              loading={isAadModalTesting} 
+              className="border-sky-500/40 text-sky-400 hover:bg-sky-500/10 text-xs gap-1.5"
+            >
+              <Wifi size={13} /> Test Connection
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => {
+                setIsAadModalOpen(false)
+                setAadModalTestResult(null)
+                setAadError(null)
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveAndConnectAad} loading={isConnectingAad} className="bg-sky-600 hover:bg-sky-500 text-white">
+                Save &amp; Connect SSO
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs text-sky-300">
+            <div className="flex items-center gap-2">
+              <Info size={16} className="text-sky-400 shrink-0" />
+              <span>Need help setting up Entra ID Single Sign-On?</span>
+            </div>
+            <button
+              onClick={() => setShowModalAadGuide(!showModalAadGuide)}
+              className="text-white font-bold underline hover:text-sky-300 shrink-0"
+            >
+              {showModalAadGuide ? 'Hide Guide' : 'View Instructions'}
+            </button>
+          </div>
+
+          {showModalAadGuide && (
+            <div className="p-3.5 rounded-xl bg-[#070B19] border border-[#1E2D52] text-xs text-gray-300 space-y-2 animate-fadeIn">
+              <div className="font-bold text-white mb-1">Quick Entra ID SSO Setup Steps:</div>
+              <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-gray-300">
+                <li>Log in to <a href="https://portal.azure.com" target="_blank" rel="noreferrer" className="text-sky-400 underline">Azure Portal</a> &rarr; <strong>Microsoft Entra ID</strong> &rarr; <strong>App registrations</strong>.</li>
+                <li>Create an app registration for Horizon SSO and set the Redirect URI (e.g. <code className="text-gray-200">{aadRedirectUri || 'http://localhost:5173/auth/callback'}</code>).</li>
+                <li>Copy <strong>Directory (tenant) ID</strong> and <strong>Application (client) ID</strong> into the fields below.</li>
+                <li>Under <strong>Certificates &amp; secrets</strong>, generate a Client Secret and copy its <strong>Value</strong>.</li>
+                <li>Under <strong>API permissions</strong>, ensure delegated permissions <code className="text-amber-300">User.Read</code> and <code className="text-amber-300">GroupMember.Read.All</code> are granted.</li>
+                <li>Map your Entra ID Security Groups to Horizon roles below so users automatically receive correct permissions upon sign-in.</li>
+              </ol>
+            </div>
+          )}
+
+          {aadModalTestResult && (
+            <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 animate-fadeIn ${
+              aadModalTestResult.success 
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+            }`}>
+              {aadModalTestResult.success ? <CheckCircle2 size={16} className="text-emerald-400 mt-0.5 shrink-0" /> : <AlertCircle size={16} className="text-rose-400 mt-0.5 shrink-0" />}
+              <div>
+                <div className="font-bold">
+                  {aadModalTestResult.success ? '✓ Microsoft Entra ID Verified & Responding' : 'Entra ID Connection Test Failed'}
+                </div>
+                <div className="text-[11px] mt-0.5 opacity-90 leading-relaxed">
+                  {aadModalTestResult.success 
+                    ? `Ping: ${aadModalTestResult.pingMs}ms | Infrastructure: ${aadModalTestResult.clusterInfo} | ${aadModalTestResult.databaseOrPath}`
+                    : aadModalTestResult.error}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {aadError && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
+              {aadError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Input 
+              label="Directory (Tenant) ID" 
+              value={aadTenantId} 
+              onChange={e => setAadTenantId(e.target.value)} 
+              placeholder="e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47" 
+              autoFocus 
+            />
+
+            <Input 
+              label="Application (Client) ID" 
+              value={aadClientId} 
+              onChange={e => setAadClientId(e.target.value)} 
+              placeholder="e.g. 11111111-2222-3333-4444-555555555555" 
+            />
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-300">Client Secret (Value)</label>
+              <button
+                type="button"
+                onClick={() => setShowAadSecret(!showAadSecret)}
+                className="text-[11px] text-sky-400 hover:text-sky-300 font-medium"
+              >
+                {showAadSecret ? 'Hide Secret' : 'Show Secret'}
+              </button>
+            </div>
+            <Input 
+              type={showAadSecret ? 'text' : 'password'}
+              value={aadClientSecret} 
+              onChange={e => setAadClientSecret(e.target.value)} 
+              placeholder="Enter client secret value from Certificates & secrets" 
+            />
+          </div>
+
+          <Input 
+            label="Redirect URI / Callback URL" 
+            value={aadRedirectUri} 
+            onChange={e => setAadRedirectUri(e.target.value)} 
+            placeholder="http://localhost:5173/auth/callback" 
+          />
+
+          <div className="pt-2 border-t border-[#1E2D52] space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Entra Security Groups &rarr; Role Mapping</h4>
+              <span className="text-[10px] text-gray-400">Match by Group Name or Object ID</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input 
+                label="Super Admin Entra Group" 
+                value={aadGroupSuperAdmin} 
+                onChange={e => setAadGroupSuperAdmin(e.target.value)} 
+                placeholder="e.g. Horizon-SuperAdmins" 
+              />
+
+              <Input 
+                label="Product Owner Entra Group" 
+                value={aadGroupProductOwner} 
+                onChange={e => setAadGroupProductOwner(e.target.value)} 
+                placeholder="e.g. Horizon-ProductOwners" 
+              />
+
+              <Input 
+                label="Product Lead Entra Group" 
+                value={aadGroupProductLead} 
+                onChange={e => setAadGroupProductLead(e.target.value)} 
+                placeholder="e.g. Horizon-ProductLeads" 
+              />
+
+              <Input 
+                label="Executive Management Entra Group" 
+                value={aadGroupManagement} 
+                onChange={e => setAadGroupManagement(e.target.value)} 
+                placeholder="e.g. Horizon-Executives" 
+              />
+            </div>
+
+            <Select
+              label="Default Fallback Role"
+              value={aadDefaultRole}
+              onChange={e => setAadDefaultRole(e.target.value)}
+              options={[
+                { value: 'TeamMember', label: 'Team Member (Default Contributor)' },
+                { value: 'Management', label: 'Executive Management (Read-Only)' },
+                { value: 'ProductLead', label: 'Product Lead' }
+              ]}
+            />
           </div>
         </div>
       </Modal>

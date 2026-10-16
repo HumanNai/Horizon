@@ -144,7 +144,7 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
 
   ipcMain.handle(IPC.AUTH_CREATE_USER, async (event, token: string, data: { username: string, password: string, displayName: string, role: string, email?: string, active?: boolean }) => {
     const session = sessions.get(token);
-    if (!session || session.user.role !== 'ProductOwner') throw new Error('Unauthorized: Product Owner access required');
+    if (!session || (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin')) throw new Error('Unauthorized: Product Owner or Super Admin access required');
 
     const id = crypto.randomUUID();
     const hash = await bcrypt.hash(data.password || 'horizon123', 10);
@@ -172,7 +172,7 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
 
   ipcMain.handle(IPC.AUTH_UPDATE_USER, async (event, token: string, userId: string, updates: { displayName?: string, role?: string, email?: string, active?: boolean, password?: string }) => {
     const session = sessions.get(token);
-    if (!session || session.user.role !== 'ProductOwner') throw new Error('Unauthorized: Product Owner access required');
+    if (!session || (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin')) throw new Error('Unauthorized: Product Owner or Super Admin access required');
 
     const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
     if (!existing) throw new Error('User not found');
@@ -210,7 +210,7 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
 
   ipcMain.handle(IPC.AUTH_DELETE_USER, async (event, token: string, userId: string) => {
     const session = sessions.get(token);
-    if (!session || session.user.role !== 'ProductOwner') throw new Error('Unauthorized: Product Owner access required');
+    if (!session || (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin')) throw new Error('Unauthorized: Product Owner or Super Admin access required');
     if (session.user.id === userId) throw new Error('Cannot delete your own active administrator account');
 
     db.prepare('DELETE FROM users WHERE id = ?').run(userId);

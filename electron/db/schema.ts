@@ -250,5 +250,53 @@ export const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_docs_product ON documents_meta(product_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sections_product ON product_custom_sections(product_id)`,
   `CREATE INDEX IF NOT EXISTS idx_ptm_product ON product_team_members(product_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_mutations_synced ON local_mutations(synced, created_at)`
+  `CREATE INDEX IF NOT EXISTS idx_mutations_synced ON local_mutations(synced, created_at)`,
+  `CREATE TABLE IF NOT EXISTS integration_maps (
+    id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    imported_at TEXT,
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS integration_nodes (
+    id TEXT PRIMARY KEY,
+    map_id TEXT NOT NULL,
+    node_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    node_type TEXT NOT NULL,
+    team_owner TEXT,
+    tech_stack TEXT,
+    environment TEXT,
+    criticality TEXT,
+    notes TEXT,
+    pos_x REAL DEFAULT 0,
+    pos_y REAL DEFAULT 0
+  )`,
+  `CREATE TABLE IF NOT EXISTS integration_edges (
+    id TEXT PRIMARY KEY,
+    map_id TEXT NOT NULL,
+    edge_key TEXT NOT NULL,
+    from_node TEXT NOT NULL,
+    to_node TEXT NOT NULL,
+    protocol TEXT,
+    direction TEXT,
+    data_format TEXT,
+    frequency TEXT,
+    criticality TEXT,
+    status TEXT,
+    notes TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS integration_groups (
+    id TEXT PRIMARY KEY,
+    map_id TEXT NOT NULL,
+    group_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    node_keys TEXT,
+    color TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_integration_nodes_map ON integration_nodes(map_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_integration_edges_map ON integration_edges(map_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_integration_maps_product ON integration_maps(product_id)`
 ];

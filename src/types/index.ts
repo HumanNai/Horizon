@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 
 // ── Roles & Auth ─────────────────────────────────────────────
-export type UserRole = 'ProductOwner' | 'ProductLead' | 'TeamMember' | 'Management'
+export type UserRole = 'SuperAdmin' | 'ProductOwner' | 'ProductLead' | 'TeamMember' | 'Management'
 
 export interface UserNotification {
   id: string
@@ -452,5 +452,68 @@ export const IPC = {
   WINDOW_CLOSE:          'window:close',
   WINDOW_IS_MAXIMIZED:   'window:isMaximized',
   WINDOW_MAXIMIZE_CHANGE:'window:maximizeChange',
+
+  // Integration Mapping
+  INTEGRATION_LIST_MAPS:        'integration:listMaps',
+  INTEGRATION_CREATE_MAP:       'integration:createMap',
+  INTEGRATION_DELETE_MAP:       'integration:deleteMap',
+  INTEGRATION_IMPORT_EXCEL:     'integration:importExcel',
+  INTEGRATION_GET_MAP_DATA:     'integration:getMapData',
+  INTEGRATION_SAVE_POSITIONS:   'integration:savePositions',
 } as const
+
+// ── Integration Mapping Interfaces ───────────────────────────
+export interface IntegrationMap {
+  id: string
+  productId: string
+  name: string
+  description?: string
+  importedAt?: string
+  createdBy?: string
+  createdAt: string
+}
+
+export type IntegrationNodeType = 'Application' | 'Database' | 'Queue' | 'ExternalAPI' | 'Gateway' | 'User' | 'Service'
+export type IntegrationProtocol = 'REST' | 'Kafka' | 'MQ' | 'gRPC' | 'SFTP' | 'DB Link' | 'Event' | 'Batch' | 'SOAP' | 'Other'
+export type IntegrationDirection = 'Unidirectional' | 'Bidirectional'
+
+export interface IntegrationNode {
+  id: string
+  mapId: string
+  nodeKey: string
+  label: string
+  nodeType: IntegrationNodeType
+  teamOwner?: string
+  techStack?: string
+  environment?: string
+  criticality?: 'High' | 'Medium' | 'Low'
+  notes?: string
+  posX?: number
+  posY?: number
+}
+
+export interface IntegrationEdge {
+  id: string
+  mapId: string
+  edgeKey: string
+  fromNode: string
+  toNode: string
+  protocol?: IntegrationProtocol
+  direction?: IntegrationDirection
+  dataFormat?: string
+  frequency?: string
+  criticality?: 'High' | 'Medium' | 'Low'
+  status?: 'Active' | 'Planned' | 'Deprecated'
+  notes?: string
+}
+
+export interface IntegrationGroup {
+  id: string
+  mapId: string
+  groupKey: string
+  label: string
+  nodeKeys?: string[]
+  color?: string
+}
+
 

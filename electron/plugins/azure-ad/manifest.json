@@ -1,0 +1,92 @@
+{
+  "id": "azure-ad",
+  "name": "Microsoft Entra ID (Azure AD) SSO",
+  "description": "Enterprise Single Sign-On (SSO) and centralized access control. Authenticate users via Microsoft Entra ID and map security groups directly to Horizon roles.",
+  "version": "1.0.0",
+  "icon": "ShieldCheck",
+  "authType": "oauth2",
+  "fields": [
+    {
+      "key": "tenantId",
+      "label": "Tenant ID (Directory ID)",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47",
+      "hint": "The Directory (tenant) ID from Azure Portal > Entra ID > Overview."
+    },
+    {
+      "key": "clientId",
+      "label": "Application (Client) ID",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. 11111111-2222-3333-4444-555555555555",
+      "hint": "The App Registration Client ID created for Horizon SSO."
+    },
+    {
+      "key": "clientSecret",
+      "label": "Client Secret",
+      "type": "password",
+      "required": true,
+      "placeholder": "Enter client secret value...",
+      "hint": "Client Secret generated under Certificates & Secrets in App Registration."
+    },
+    {
+      "key": "redirectUri",
+      "label": "Redirect URI / Callback URL",
+      "type": "text",
+      "required": true,
+      "placeholder": "e.g. http://localhost:5173/auth/callback or https://horizon.yourcorp.com/auth/callback",
+      "hint": "Must match the Web Redirect URI configured in Azure App Registration."
+    },
+    {
+      "key": "groupSuperAdmin",
+      "label": "Super Admin Entra Group Name or Object ID",
+      "type": "text",
+      "required": false,
+      "placeholder": "e.g. Horizon-SuperAdmins or 8e5d...",
+      "hint": "Users in this Entra ID group receive SuperAdmin role upon sign-in."
+    },
+    {
+      "key": "groupProductOwner",
+      "label": "Product Owner Entra Group Name or Object ID",
+      "type": "text",
+      "required": false,
+      "placeholder": "e.g. Horizon-ProductOwners",
+      "hint": "Users in this Entra ID group receive ProductOwner role upon sign-in."
+    },
+    {
+      "key": "groupProductLead",
+      "label": "Product Lead Entra Group Name or Object ID",
+      "type": "text",
+      "required": false,
+      "placeholder": "e.g. Horizon-ProductLeads",
+      "hint": "Users in this Entra ID group receive ProductLead role upon sign-in."
+    },
+    {
+      "key": "groupManagement",
+      "label": "Executive Management Entra Group Name or Object ID",
+      "type": "text",
+      "required": false,
+      "placeholder": "e.g. Horizon-Executives",
+      "hint": "Users in this Entra ID group receive Management role upon sign-in."
+    },
+    {
+      "key": "defaultRole",
+      "label": "Default Fallback Role",
+      "type": "select",
+      "required": true,
+      "options": [
+        { "label": "Team Member (Default)", "value": "TeamMember" },
+        { "label": "Management (Read-Only)", "value": "Management" },
+        { "label": "Product Lead", "value": "ProductLead" }
+      ]
+    }
+  ],
+  "scopes": [
+    "User.Read",
+    "openid",
+    "profile",
+    "email",
+    "GroupMember.Read.All"
+  ]
+}

@@ -234,6 +234,7 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  const isSuperAdmin = user?.role === 'SuperAdmin'
   const isPO = user?.role === 'ProductOwner'
   const isLead = user?.role === 'ProductLead'
   const isExec = user?.role === 'Management'
@@ -241,9 +242,12 @@ export function AppShell() {
   const navItems = [
     { name: isExec ? 'Executive Oversight' : 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: isExec ? 'Applications (Oversight)' : 'Applications', path: '/products', icon: Package },
-    // Plugins & Integrations, HR, Access, Audit: ONLY for Product Owner
-    ...(isPO ? [
+    // SuperAdmin only: Plugins & Integrations
+    ...(isSuperAdmin ? [
       { name: 'Plugins & Integrations', path: '/plugins', icon: Puzzle },
+    ] : []),
+    // SuperAdmin + ProductOwner: HR, Access, Audit
+    ...(isSuperAdmin || isPO ? [
       { name: 'Team & HR', path: '/hr', icon: Users },
       { name: 'Role & Access (RBAC)', path: '/access', icon: UserCheck },
       { name: 'Audit Log', path: '/audit', icon: ShieldAlert }
@@ -332,12 +336,14 @@ export function AppShell() {
                 <div className="flex flex-col min-w-0">
                   <span className="text-xs font-semibold text-white truncate">{user?.displayName || 'Product Owner'}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 inline-block w-fit ${
+                    user?.role === 'SuperAdmin' ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
                     user?.role === 'ProductOwner' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
                     user?.role === 'ProductLead' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' :
                     user?.role === 'Management' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
                     'bg-blue-500/15 text-blue-400 border border-blue-500/30'
                   }`}>
-                    {user?.role === 'ProductOwner' ? 'Product Owner' :
+                    {user?.role === 'SuperAdmin' ? 'Super Admin' :
+                     user?.role === 'ProductOwner' ? 'Product Owner' :
                      user?.role === 'ProductLead' ? 'Product Lead' :
                      user?.role === 'Management' ? 'Executive' :
                      'Team Member'}
