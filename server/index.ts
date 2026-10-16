@@ -510,6 +510,21 @@ app.post('/api/plugins/test-connection', authMiddleware, async (req: Request, re
   }
 });
 
+// ── 5b. System Health Endpoint ──────────────────────────────
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'healthy',
+    app: 'Horizon PM',
+    version: '1.1.0',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    database: {
+      engine: 'sqlite',
+      path: dbPath
+    }
+  });
+});
+
 // ── 6. Static Asset Serving for Hosted Web Mode ──────────────
 const clientDistCandidates = [
   path.join(process.cwd(), 'out', 'renderer'),
