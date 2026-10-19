@@ -44,6 +44,7 @@ COPY --from=builder --chown=node:node /app/out ./out
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/electron ./electron
 COPY --from=builder --chown=node:node /app/src/types ./src/types
+COPY --from=builder --chown=node:node /app/src/utils ./src/utils
 COPY --from=builder --chown=node:node /app/server ./server
 COPY --from=builder --chown=node:node /app/tsconfig.json ./tsconfig.json
 

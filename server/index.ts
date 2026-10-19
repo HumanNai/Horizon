@@ -451,8 +451,9 @@ function sanitizeRows(rows: any[]): any[] {
 app.post('/api/db/query', authMiddleware, (req: Request, res: Response) => {
   try {
     const { sql, params = [] } = req.body;
-    const rows = db.prepare(sql).all(...params);
-    res.json(rows);
+    const safeSql = validateSafeQuery(sql);
+    const rows = db.prepare(safeSql).all(...params);
+    res.json(sanitizeRows(rows));
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -461,7 +462,8 @@ app.post('/api/db/query', authMiddleware, (req: Request, res: Response) => {
 app.post('/api/db/execute', authMiddleware, (req: Request, res: Response) => {
   try {
     const { sql, params = [] } = req.body;
-    const info = db.prepare(sql).run(...params);
+    const safeSql = validateSafeExecute(sql);
+    const info = db.prepare(safeSql).run(...params);
     res.json({ changes: info.changes, lastInsertRowid: info.lastInsertRowid });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
