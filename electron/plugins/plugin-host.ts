@@ -1,4 +1,14 @@
-import { IpcMain, app } from 'electron';
+import type { IpcMain } from 'electron';
+
+let electronApp: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const electron = require('electron');
+  electronApp = electron.app;
+} catch {
+  // Running in headless Node.js / Docker
+}
+
 import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -29,8 +39,8 @@ export class PluginHost {
   private getPortableConfigPaths(): string[] {
     const paths: string[] = [];
     try {
-      if (app && typeof app.getPath === 'function') {
-        paths.push(path.join(app.getPath('userData'), 'horizon-config.json'));
+      if (electronApp && typeof electronApp.getPath === 'function') {
+        paths.push(path.join(electronApp.getPath('userData'), 'horizon-config.json'));
       }
     } catch (_) {}
     try {

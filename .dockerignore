@@ -1,0 +1,10 @@
+node_modules
+release
+dist
+data
+userData
+.git
+.github
+*.log
+.DS_Store
+Thumbs.db

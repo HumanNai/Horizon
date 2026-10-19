@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import { DiagnosticLog, IPC } from '../../src/types';
 
 class PluginLogger {

@@ -1,6 +1,5 @@
 import { PublicClientApplication, ConfidentialClientApplication, Configuration } from '@azure/msal-node';
 import axios from 'axios';
-import { shell } from 'electron';
 import { PluginConfig } from '../../../src/types';
 import { pluginLogger } from '../logger';
 
@@ -131,7 +130,13 @@ export class AzureKeyVaultConnector {
         const result = await this.pca.acquireTokenInteractive({
           scopes: [scope],
           openBrowser: async (url: string) => {
-            await shell.openExternal(url);
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const { shell } = require('electron');
+              await shell.openExternal(url);
+            } catch {
+              console.log(`[AzureKeyVault] Authenticate at: ${url}`);
+            }
           }
         });
         if (!result?.accessToken) {
