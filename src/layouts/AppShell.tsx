@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useProductStore } from '../store/productStore'
 import { SyncStatusBar } from '../components/SyncStatusBar'
@@ -263,7 +263,10 @@ export function AppShell() {
     (window as any).horizon?.window?.[action]?.()
   }
 
-  const activeItem = navItems.find(i => location.pathname.startsWith(i.path))
+  const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/' || location.pathname === ''
+  const activeItem = navItems.find(i => 
+    i.path === '/dashboard' ? isDashboardActive : location.pathname.startsWith(i.path)
+  )
   const productMatch = location.pathname.match(/^\/products\/([^/]+)/)
   const currentProductId = productMatch ? productMatch[1] : null
   const currentProduct = currentProductId ? products.find(p => p.id === currentProductId) : null
@@ -304,24 +307,37 @@ export function AppShell() {
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon
-            const isActive = location.pathname.startsWith(item.path)
+            const isItemActive = item.path === '/dashboard' 
+              ? isDashboardActive 
+              : location.pathname.startsWith(item.path)
+
             return (
-              <button
+              <NavLink
                 key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative ${
-                  isActive 
-                    ? 'bg-gradient-to-r from-[#2E5EFF]/20 to-[#2E5EFF]/5 text-[#6087FF] border border-[#2E5EFF]/30 shadow-[0_0_20px_rgba(46,94,255,0.15)]' 
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#111A33]/80'
-                }`}
+                to={item.path}
+                className={({ isActive: routerIsActive }) => {
+                  const active = isItemActive || routerIsActive
+                  return `w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 group relative select-none focus:outline-none ${
+                    active 
+                      ? 'bg-gradient-to-r from-[#2E5EFF]/20 to-[#2E5EFF]/5 text-[#6087FF] border border-[#2E5EFF]/30 shadow-[0_0_20px_rgba(46,94,255,0.15)] font-semibold' 
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#111A33]/80 border border-transparent'
+                  }`
+                }}
                 title={collapsed ? item.name : undefined}
               >
-                {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-[#2E5EFF] rounded-r-full shadow-[0_0_8px_#2E5EFF]" />
-                )}
-                <Icon size={18} className={`shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-[#2E5EFF]' : 'text-gray-400 group-hover:text-gray-200'}`} />
-                {!collapsed && <span className="truncate">{item.name}</span>}
-              </button>
+                {({ isActive: routerIsActive }) => {
+                  const active = isItemActive || routerIsActive
+                  return (
+                    <>
+                      {active && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-[#2E5EFF] rounded-r-full shadow-[0_0_8px_#2E5EFF]" />
+                      )}
+                      <Icon size={18} className={`shrink-0 transition-transform group-hover:scale-110 ${active ? 'text-[#2E5EFF]' : 'text-gray-400 group-hover:text-gray-200'}`} />
+                      {!collapsed && <span className="truncate">{item.name}</span>}
+                    </>
+                  )
+                }}
+              </NavLink>
             )
           })}
         </nav>

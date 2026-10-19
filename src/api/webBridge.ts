@@ -103,11 +103,22 @@ export function setupWebBridge(): void {
       trigger: () => apiRequest('/sync/trigger', { method: 'POST' }),
       getState: () => apiRequest('/sync/state'),
       onStatus: (_callback: (status: any) => void) => {
+        // Hydrate immediately on mount
+        apiRequest('/sync/state')
+          .then(state => {
+            if (state && typeof state === 'object' && state.status) {
+              _callback(state);
+            }
+          })
+          .catch(() => {});
+
         // In web mode, periodically poll sync status
         const interval = setInterval(async () => {
           try {
             const state = await apiRequest('/sync/state');
-            _callback(state);
+            if (state && typeof state === 'object' && state.status) {
+              _callback(state);
+            }
           } catch (_) {}
         }, 30000);
         return () => clearInterval(interval);

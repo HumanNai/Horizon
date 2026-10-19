@@ -510,6 +510,51 @@ app.post('/api/plugins/test-connection', authMiddleware, async (req: Request, re
   }
 });
 
+// ── 5a. Sync Endpoints ───────────────────────────────────────
+app.get('/api/sync/state', (req: Request, res: Response) => {
+  try {
+    let pending = 0;
+    try {
+      const pendingRow = db.prepare('SELECT COUNT(*) as cnt FROM local_mutations WHERE synced = 0').get() as any;
+      pending = pendingRow?.cnt || 0;
+    } catch {}
+
+    let lastSyncAt: string | undefined = undefined;
+    try {
+      const syncRow = db.prepare('SELECT MIN(last_sync_at) as t FROM sync_state').get() as any;
+      lastSyncAt = syncRow?.t || undefined;
+    } catch {}
+
+    const provider = pluginHost.getActiveProvider();
+
+    res.json({
+      status: provider ? 'idle' : 'idle',
+      lastSyncAt: lastSyncAt || new Date().toISOString(),
+      pendingChanges: pending
+    });
+  } catch (err: any) {
+    res.json({
+      status: 'idle',
+      lastSyncAt: new Date().toISOString(),
+      pendingChanges: 0
+    });
+  }
+});
+
+app.post('/api/sync/trigger', async (req: Request, res: Response) => {
+  try {
+    const provider = pluginHost.getActiveProvider();
+    if (provider) {
+      await provider.pushMutations(db);
+      await provider.pullDeltas(db);
+    }
+    const now = new Date().toISOString();
+    res.json({ success: true, status: 'idle', lastSyncAt: now, pendingChanges: 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── 5b. System Health Endpoint ──────────────────────────────
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
