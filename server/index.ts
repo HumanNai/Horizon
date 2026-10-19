@@ -16,6 +16,26 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ── Structured Server-Side Error Logging ────────────────────
+function logServerError(context: string, err: any, req?: Request) {
+  const ts = new Date().toISOString();
+  const msg = err?.message || String(err);
+  const stack = err?.stack ? `\n  ${err.stack.split('\n').slice(1, 4).join('\n  ')}` : '';
+  console.error(`[${ts}] [ERROR] [${context}]${req ? ` ${req.method} ${req.url}` : ''} — ${msg}${stack}`);
+}
+
+// Persist critical errors to audit_log (best-effort)
+function auditServerError(context: string, err: any, userId?: string) {
+  try {
+    const id = crypto.randomUUID();
+    const msg = String(err?.message || err).substring(0, 500);
+    db.prepare(
+      `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, detail, created_at)
+       VALUES (?, ?, 'SERVER_ERROR', 'System', ?, ?, CURRENT_TIMESTAMP)`
+    ).run(id, userId || 'system', context, msg);
+  } catch (_) { /* audit insert must never crash the process */ }
+}
+
 
 // ── Database Initialization (Pluggable SQLite default) ───────
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
@@ -67,6 +87,13 @@ pluginHost.loadPlugin('azure-keyvault');
 pluginHost.loadPlugin('azure-ad');
 
 // ── In-Memory Sessions ───────────────────────────────────────
+// ── Node.js process-level error safety nets ─────────────────
+process.on('unhandledRejection', (reason: any) => {
+  logServerError('UnhandledRejection', reason);
+});
+process.on('uncaughtException', (err: Error) => {
+  logServerError('UncaughtException', err);
+});
 const sessions = new Map<string, SessionInfo>();
 const SECRET_KEY = crypto.randomBytes(32);
 
@@ -510,6 +537,327 @@ app.post('/api/plugins/test-connection', authMiddleware, async (req: Request, re
   }
 });
 
+// ── 4a. Secrets Vault Routes ─────────────────────────────────
+// In-memory per-session vault state: token → { key: Buffer | null }
+const vaultKeys = new Map<string, Buffer | null>();
+
+const VAULT_ALGORITHM = 'aes-256-gcm';
+const VAULT_IV_LEN = 12;
+const VAULT_TAG_LEN = 16;
+const VAULT_ITERATIONS = 210000;
+const VAULT_KEY_LEN = 32;
+
+function vaultEncrypt(text: string, key: Buffer): string {
+  const iv = crypto.randomBytes(VAULT_IV_LEN);
+  const cipher = crypto.createCipheriv(VAULT_ALGORITHM, key, iv);
+  let enc = cipher.update(text, 'utf8', 'hex');
+  enc += cipher.final('hex');
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, Buffer.from(enc, 'hex')]).toString('base64');
+}
+
+function vaultDecrypt(encText: string, key: Buffer): string {
+  const data = Buffer.from(encText, 'base64');
+  const iv = data.subarray(0, VAULT_IV_LEN);
+  const tag = data.subarray(VAULT_IV_LEN, VAULT_IV_LEN + VAULT_TAG_LEN);
+  const enc = data.subarray(VAULT_IV_LEN + VAULT_TAG_LEN);
+  const decipher = crypto.createDecipheriv(VAULT_ALGORITHM, key, iv);
+  decipher.setAuthTag(tag);
+  let dec = decipher.update(enc, undefined, 'utf8');
+  dec += decipher.final('utf8');
+  return dec;
+}
+
+function getOrCreateVaultSalt(): string {
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS _kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+    const row = db.prepare("SELECT value FROM _kv WHERE key = 'vault_salt'").get() as any;
+    if (row) return row.value;
+    const salt = crypto.randomBytes(32).toString('hex');
+    db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_salt', ?)").run(salt);
+    return salt;
+  } catch { return crypto.randomBytes(32).toString('hex'); }
+}
+
+function getVaultVerifier(): string | null {
+  try {
+    const row = db.prepare("SELECT value FROM _kv WHERE key = 'vault_verifier'").get() as any;
+    return row?.value || null;
+  } catch { return null; }
+}
+
+const VAULT_SENTINEL = 'HORIZON_VAULT_ENCRYPTED_SENTINEL_V1';
+
+function logSecretAudit(userId: string, action: string, entityId: string) {
+  try {
+    db.prepare(
+      `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, 'Secret', ?, CURRENT_TIMESTAMP)`
+    ).run(crypto.randomUUID(), userId, action, entityId);
+  } catch (_) {}
+}
+
+app.get('/api/secrets/status', authMiddleware, (req: Request, res: Response) => {
+  try {
+    const token = (req as any).sessionToken;
+    const verifier = getVaultVerifier();
+    let lastRotatedAt: string | null = null;
+    try {
+      const row = db.prepare("SELECT value FROM _kv WHERE key = 'vault_last_rotated'").get() as any;
+      lastRotatedAt = row?.value || null;
+    } catch {}
+    res.json({ isInitialized: Boolean(verifier), isUnlocked: Boolean(vaultKeys.get(token)), lastRotatedAt });
+  } catch (err: any) {
+    logServerError('/api/secrets/status', err, req);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/secrets/setup-passphrase', authMiddleware, async (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  const token = (req as any).sessionToken;
+  if (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin') {
+    return res.status(403).json({ error: 'Only Product Owners can set up the vault passphrase' });
+  }
+  const passphrase = (req.body.passphrase || '').trim();
+  if (!passphrase || passphrase.length < 6) return res.status(400).json({ error: 'Passphrase must be at least 6 characters' });
+  if (getVaultVerifier()) return res.status(409).json({ error: 'Vault already initialized. Use change-passphrase.' });
+  try {
+    const salt = crypto.randomBytes(32).toString('hex');
+    db.exec(`CREATE TABLE IF NOT EXISTS _kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+    db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_salt', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(salt);
+    const key = await new Promise<Buffer>((res, rej) => crypto.pbkdf2(passphrase, salt, VAULT_ITERATIONS, VAULT_KEY_LEN, 'sha256', (e, k) => e ? rej(e) : res(k)));
+    const verifierBlob = vaultEncrypt(VAULT_SENTINEL, key);
+    db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_verifier', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(verifierBlob);
+    db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_last_rotated', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(new Date().toISOString());
+    vaultKeys.set(token, key);
+    logSecretAudit(session.user.id, 'VaultPassphraseInitialized', 'MasterVault');
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/setup-passphrase', err, req);
+    auditServerError('secrets/setup-passphrase', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/secrets/unlock', authMiddleware, async (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  const token = (req as any).sessionToken;
+  const passphrase = (req.body.passphrase || '').trim();
+  if (!passphrase) return res.status(400).json({ error: 'Passphrase is required' });
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS _kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+    const salt = getOrCreateVaultSalt();
+    const key = await new Promise<Buffer>((resolve, reject) => crypto.pbkdf2(passphrase, salt, VAULT_ITERATIONS, VAULT_KEY_LEN, 'sha256', (e, k) => e ? reject(e) : resolve(k)));
+    const verifier = getVaultVerifier();
+    if (verifier) {
+      let check: string;
+      try { check = vaultDecrypt(verifier, key); } catch { return res.status(401).json({ error: 'Invalid master vault passphrase' }); }
+      if (check !== VAULT_SENTINEL) return res.status(401).json({ error: 'Invalid master vault passphrase' });
+    } else {
+      // First-time unlock: auto-create verifier
+      const blob = vaultEncrypt(VAULT_SENTINEL, key);
+      db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_verifier', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(blob);
+      db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_last_rotated', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(new Date().toISOString());
+    }
+    vaultKeys.set(token, key);
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/unlock', err, req);
+    auditServerError('secrets/unlock', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/secrets/lock', authMiddleware, (req: Request, res: Response) => {
+  const token = (req as any).sessionToken;
+  vaultKeys.set(token, null);
+  res.json(true);
+});
+
+app.post('/api/secrets/change-passphrase', authMiddleware, async (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  const token = (req as any).sessionToken;
+  if (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin') {
+    return res.status(403).json({ error: 'Only Product Owners can change the vault passphrase' });
+  }
+  const { currentPassphrase, newPassphrase } = req.body;
+  if (!newPassphrase || newPassphrase.trim().length < 6) return res.status(400).json({ error: 'New passphrase must be at least 6 characters' });
+  try {
+    const salt = getOrCreateVaultSalt();
+    const oldKey = await new Promise<Buffer>((res, rej) => crypto.pbkdf2((currentPassphrase || '').trim(), salt, VAULT_ITERATIONS, VAULT_KEY_LEN, 'sha256', (e, k) => e ? rej(e) : res(k)));
+    const verifier = getVaultVerifier();
+    if (verifier) {
+      let check: string;
+      try { check = vaultDecrypt(verifier, oldKey); } catch { return res.status(401).json({ error: 'Current passphrase is incorrect' }); }
+      if (check !== VAULT_SENTINEL) return res.status(401).json({ error: 'Current passphrase is incorrect' });
+    }
+    const localRows = db.prepare("SELECT id, encrypted_value FROM secrets_meta WHERE encrypted_value IS NOT NULL AND encrypted_value != ''").all() as any[];
+    const decrypted: { id: string; plain: string }[] = [];
+    for (const r of localRows) {
+      try { decrypted.push({ id: r.id, plain: vaultDecrypt(r.encrypted_value, oldKey) }); }
+      catch (e: any) { return res.status(500).json({ error: `Could not re-encrypt secret ${r.id}: ${e.message}` }); }
+    }
+    const newSalt = crypto.randomBytes(32).toString('hex');
+    const newKey = await new Promise<Buffer>((res, rej) => crypto.pbkdf2(newPassphrase.trim(), newSalt, VAULT_ITERATIONS, VAULT_KEY_LEN, 'sha256', (e, k) => e ? rej(e) : res(k)));
+    const updateStmt = db.prepare("UPDATE secrets_meta SET encrypted_value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+    db.transaction(() => {
+      for (const item of decrypted) updateStmt.run(vaultEncrypt(item.plain, newKey), item.id);
+      db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_salt', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(newSalt);
+      db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_verifier', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(vaultEncrypt(VAULT_SENTINEL, newKey));
+      db.prepare("INSERT INTO _kv (key, value) VALUES ('vault_last_rotated', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(new Date().toISOString());
+    })();
+    vaultKeys.set(token, newKey);
+    logSecretAudit(session.user.id, 'VaultPassphraseRotated', 'MasterVault');
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/change-passphrase', err, req);
+    auditServerError('secrets/change-passphrase', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/secrets/list', authMiddleware, (req: Request, res: Response) => {
+  try {
+    // Ensure secrets_meta has encrypted_value column (may be missing on older DBs)
+    try { db.exec('ALTER TABLE secrets_meta ADD COLUMN encrypted_value TEXT'); } catch (_) {}
+    const local = db.prepare(
+      `SELECT id, name, category, description, last_rotated_at as lastRotatedAt, last_accessed_at as lastAccessedAt, last_accessed_by as lastAccessedBy, created_at as createdAt, updated_at as updatedAt, 'local' as source FROM secrets_meta ORDER BY name`
+    ).all();
+    res.json(local);
+  } catch (err: any) {
+    logServerError('/api/secrets/list', err, req);
+    auditServerError('secrets/list', err, (req as any).userSession?.user?.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/secrets/add', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  const token = (req as any).sessionToken;
+  const key = vaultKeys.get(token);
+  if (!key) return res.status(403).json({ error: 'Vault is locked. Unlock with your passphrase first.' });
+  const { name, category, value, description } = req.body;
+  if (!name || !value) return res.status(400).json({ error: 'Name and value are required' });
+  try {
+    const id = crypto.randomUUID();
+    const encrypted = vaultEncrypt(value, key);
+    db.prepare(
+      `INSERT INTO secrets_meta (id, name, category, description, last_rotated_at, encrypted_value, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(id, name, category || 'General', description || '', encrypted);
+    logSecretAudit(session.user.id, 'SecretAdd', id);
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/add', err, req);
+    auditServerError('secrets/add', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/secrets/reveal/:id', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  const token = (req as any).sessionToken;
+  const key = vaultKeys.get(token);
+  if (!key) return res.status(403).json({ error: 'Vault is locked' });
+  try {
+    const meta = db.prepare('SELECT * FROM secrets_meta WHERE id = ?').get(req.params.id) as any;
+    if (!meta) return res.status(404).json({ error: 'Secret not found' });
+    if (!meta.encrypted_value) return res.status(500).json({ error: 'No encrypted data found for this secret' });
+    const plaintext = vaultDecrypt(meta.encrypted_value, key);
+    db.prepare('UPDATE secrets_meta SET last_accessed_at = CURRENT_TIMESTAMP, last_accessed_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(session.user.id, req.params.id);
+    logSecretAudit(session.user.id, 'SecretView', req.params.id);
+    res.json(plaintext);
+  } catch (err: any) {
+    logServerError('/api/secrets/reveal', err, req);
+    auditServerError('secrets/reveal', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/secrets/rotate/:id', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  const token = (req as any).sessionToken;
+  const key = vaultKeys.get(token);
+  if (!key) return res.status(403).json({ error: 'Vault is locked' });
+  try {
+    const meta = db.prepare('SELECT id FROM secrets_meta WHERE id = ?').get(req.params.id) as any;
+    if (!meta) return res.status(404).json({ error: 'Secret not found' });
+    const { newValue } = req.body;
+    if (!newValue) return res.status(400).json({ error: 'newValue is required' });
+    const encrypted = vaultEncrypt(newValue, key);
+    db.prepare('UPDATE secrets_meta SET encrypted_value = ?, last_rotated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(encrypted, req.params.id);
+    logSecretAudit(session.user.id, 'SecretRotate', req.params.id);
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/rotate', err, req);
+    auditServerError('secrets/rotate', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/secrets/:id', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  try {
+    const meta = db.prepare('SELECT id FROM secrets_meta WHERE id = ?').get(req.params.id) as any;
+    if (!meta) return res.status(404).json({ error: 'Secret not found' });
+    db.prepare('DELETE FROM secrets_meta WHERE id = ?').run(req.params.id);
+    logSecretAudit(session.user.id, 'SecretDelete', req.params.id);
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/delete', err, req);
+    auditServerError('secrets/delete', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/secrets/azure/status', (req: Request, res: Response) => {
+  try {
+    const row = db.prepare("SELECT status, connected_as, error FROM plugin_configs WHERE plugin_id = 'azure-keyvault'").get() as any;
+    res.json({ connected: row?.status === 'connected', status: row?.status || 'disconnected', connectedAs: row?.connected_as || null, error: row?.error || null });
+  } catch { res.json({ connected: false, status: 'disconnected', connectedAs: null, error: null }); }
+});
+
+app.get('/api/secrets/azure/list', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const akv = pluginHost.getAzureKeyVaultConnector?.();
+    if (!akv) return res.json([]);
+    const list = await akv.listSecrets();
+    res.json(list || []);
+  } catch (err: any) {
+    logServerError('/api/secrets/azure/list', err, req);
+    res.json([]); // non-fatal: return empty instead of error
+  }
+});
+
+app.get('/api/secrets/azure/reveal/:name', authMiddleware, async (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  try {
+    const akv = pluginHost.getAzureKeyVaultConnector?.();
+    if (!akv) return res.status(503).json({ error: 'Azure Key Vault is not connected' });
+    const plain = await akv.getSecretValue(req.params.name);
+    logSecretAudit(session.user.id, 'SecretView', `azure:${req.params.name}`);
+    res.json(plain);
+  } catch (err: any) {
+    logServerError('/api/secrets/azure/reveal', err, req);
+    auditServerError('secrets/azure/reveal', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/secrets/azure/add', authMiddleware, async (req: Request, res: Response) => {
+  const session = (req as any).userSession;
+  try {
+    const akv = pluginHost.getAzureKeyVaultConnector?.();
+    if (!akv) return res.status(503).json({ error: 'Azure Key Vault is not connected' });
+    const { name, value, category } = req.body;
+    await akv.setSecret(name, value, category);
+    logSecretAudit(session.user.id, 'SecretAdd', `azure:${name}`);
+    res.json(true);
+  } catch (err: any) {
+    logServerError('/api/secrets/azure/add', err, req);
+    auditServerError('secrets/azure/add', err, session.user.id);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ── 5a. Sync Endpoints ───────────────────────────────────────
 app.get('/api/sync/state', (req: Request, res: Response) => {
   try {
@@ -600,6 +948,13 @@ app.use((req: Request, res: Response) => {
   }
 });
 
+// ── Global Express Error Handler ────────────────────────────
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+  const session = (req as any).userSession;
+  logServerError('ExpressGlobalError', err, req);
+  auditServerError(`${req.method} ${req.path}`, err, session?.user?.id);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
 app.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(` 🚀 Horizon PM Hosted Web Server running on port ${PORT}`);

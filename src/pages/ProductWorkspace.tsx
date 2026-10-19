@@ -402,8 +402,19 @@ export function ProductWorkspace() {
         if (ab) setActiveBackend(ab)
       } catch {}
 
-      // Releases
-      const relRows = await dbQuery<any>('SELECT * FROM releases WHERE product_id = ? ORDER BY target_date ASC', [productId])
+      // -- Parallel data loading: all independent queries fire at once --
+      const [relRows, taskRows, ifRows, apiRows, docRows, schedRows] = await Promise.all([
+        dbQuery<any>('SELECT * FROM releases WHERE product_id = ? ORDER BY target_date ASC', [productId]),
+        dbQuery<any>('SELECT * FROM tasks WHERE product_id = ? ORDER BY created_at DESC', [productId]),
+        dbQuery<any>('SELECT * FROM interfaces WHERE product_id = ? ORDER BY name ASC', [productId]),
+        dbQuery<any>('SELECT * FROM apis WHERE product_id = ? ORDER BY name ASC', [productId]).catch(() => [] as any[]),
+        dbQuery<any>('SELECT * FROM documents_meta WHERE product_id = ?', [productId]),
+        dbQuery<any>(
+          `SELECT * FROM schedule_events WHERE linked_id = ? OR (linked_type = 'Product' AND linked_id = ?) OR (linked_type = 'Release' AND linked_id IN (SELECT id FROM releases WHERE product_id = ?)) ORDER BY start_date ASC`,
+          [productId, productId, productId]
+        ),
+      ])
+
       const mappedReleases: Release[] = relRows.map(r => ({
         id: r.id,
         productId: r.product_id,
@@ -423,8 +434,6 @@ export function ProductWorkspace() {
         setSelectedRelease(mappedReleases[0])
       }
 
-      // Tasks
-      const taskRows = await dbQuery<any>('SELECT * FROM tasks WHERE product_id = ? ORDER BY created_at DESC', [productId])
       const mappedTasks: Task[] = taskRows.map(t => ({
         id: t.id,
         title: t.title,
@@ -439,156 +448,76 @@ export function ProductWorkspace() {
         updatedAt: t.updated_at
       }))
       setTasks(mappedTasks)
-
-      // Interfaces (MQ, Kafka, Scheduler, Event Brokers)
-      const ifRows = await dbQuery<any>('SELECT * FROM interfaces WHERE product_id = ? ORDER BY name ASC', [productId])
       setInterfaces(ifRows)
-
-      // Dedicated APIs (Endpoints, Scopes, Given To)
-      const apiRows = await dbQuery<any>('SELECT * FROM apis WHERE product_id = ? ORDER BY name ASC', [productId])
       setApis(apiRows)
-
-      // Documents
-      const docRows = await dbQuery<any>('SELECT * FROM documents_meta WHERE product_id = ?', [productId])
       setDocuments(docRows)
-
-      // Schedule Events
-      const schedRows = await dbQuery<any>(
-        `SELECT * FROM schedule_events 
-         WHERE linked_id = ? 
-            OR (linked_type = 'Product' AND linked_id = ?) 
-            OR (linked_type = 'Release' AND linked_id IN (SELECT id FROM releases WHERE product_id = ?))
-         ORDER BY start_date ASC`,
-        [productId, productId, productId]
-      )
       setScheduleEvents(schedRows)
 
-      // UAT Test Cases (linked directly or via releases of this product)
-      try {
-        const uatRows = await dbQuery<any>(
-          `SELECT u.*, r.name as release_name, r.version as release_version 
-           FROM uat_cases u
-           LEFT JOIN releases r ON u.release_id = r.id
-           WHERE u.product_id = ? 
-              OR u.release_id IN (SELECT id FROM releases WHERE product_id = ?)
-           ORDER BY u.updated_at DESC`,
+      // -- Secondary batch: queries that depend on releases or need DDL first --
+      await Promise.allSettled([
+        // UAT Cases
+        dbQuery<any>(
+          `SELECT u.*, r.name as release_name, r.version as release_version FROM uat_cases u LEFT JOIN releases r ON u.release_id = r.id WHERE u.product_id = ? OR u.release_id IN (SELECT id FROM releases WHERE product_id = ?) ORDER BY u.updated_at DESC`,
           [productId, productId]
-        )
-        const mappedUat: UATCase[] = uatRows.map(u => ({
-          id: u.id,
-          releaseId: u.release_id,
-          productId: u.product_id || productId,
-          title: u.title,
-          description: u.description,
-          result: u.result || 'Pending',
-          assigneeId: u.assignee_id,
-          notes: u.notes,
-          attachmentName: u.attachment_name,
-          attachmentData: u.attachment_data,
-          attachmentSize: u.attachment_size,
-          spItemId: u.sp_item_id,
-          updatedAt: u.updated_at,
-          ...(u.release_name ? { releaseName: u.release_name, releaseVersion: u.release_version } : {})
-        } as any))
-        setUatCases(mappedUat)
-      } catch (uatErr) {
-        console.warn('Error loading UAT cases:', uatErr)
-      }
+        ).then(uatRows => {
+          setUatCases(uatRows.map(u => ({
+            id: u.id,
+            releaseId: u.release_id,
+            productId: u.product_id || productId,
+            title: u.title,
+            description: u.description,
+            result: u.result || 'Pending',
+            assigneeId: u.assignee_id,
+            notes: u.notes,
+            attachmentName: u.attachment_name,
+            attachmentData: u.attachment_data,
+            attachmentSize: u.attachment_size,
+            spItemId: u.sp_item_id,
+            updatedAt: u.updated_at,
+            ...(u.release_name ? { releaseName: u.release_name, releaseVersion: u.release_version } : {})
+          } as any)))
+        }).catch(uatErr => console.warn('Error loading UAT cases:', uatErr)),
 
-      // Query Release Sign-Offs for releases belonging to this product
-      try {
-        const signoffRows = await dbQuery<any>(
-          `SELECT rs.*, r.name as release_name, r.version as release_version
-           FROM release_signoffs rs
-           INNER JOIN releases r ON rs.release_id = r.id
-           WHERE r.product_id = ?
-           ORDER BY rs.signed_off_at DESC`,
+        // Release Sign-Offs
+        dbQuery<any>(
+          `SELECT rs.*, r.name as release_name, r.version as release_version FROM release_signoffs rs INNER JOIN releases r ON rs.release_id = r.id WHERE r.product_id = ? ORDER BY rs.signed_off_at DESC`,
           [productId]
-        )
-        setReleaseSignoffs(signoffRows)
-      } catch (soErr) {
-        console.warn('Error loading release signoffs:', soErr)
-      }
+        ).then(rows => setReleaseSignoffs(rows)).catch(e => console.warn('Error loading release signoffs:', e)),
 
-      // Application Team Members
-      try {
-        await dbExecute(`CREATE TABLE IF NOT EXISTS product_team_members (
-          id TEXT PRIMARY KEY,
-          product_id TEXT NOT NULL,
-          user_id TEXT NOT NULL,
-          role_in_product TEXT DEFAULT 'Contributor',
-          assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(product_id, user_id)
-        )`)
+        // Team Members (DDL-guarded)
+        (async () => {
+          try {
+            await dbExecute(`CREATE TABLE IF NOT EXISTS product_team_members (id TEXT PRIMARY KEY, product_id TEXT NOT NULL, user_id TEXT NOT NULL, role_in_product TEXT DEFAULT 'Contributor', assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(product_id, user_id))`)
+            const appOwner = p.owner_id || currentUser?.displayName || currentUser?.username || 'Product Owner'
+            await dbExecute(`INSERT OR IGNORE INTO product_team_members (id, product_id, user_id, role_in_product) VALUES (?, ?, ?, 'Product Lead')`, [`ptm-lead-${productId}`, productId, appOwner])
+            const [members, allUsers] = await Promise.all([
+              dbQuery<any>(`SELECT ptm.id as membership_id, ptm.role_in_product, ptm.assigned_at, u.id as user_id, COALESCE(u.display_name, ptm.user_id) as display_name, u.username, COALESCE(u.role, 'TeamMember') as system_role, u.email, u.avatar_initials, hr.status as hr_status, hr.work_location, hr.leave_from, hr.leave_to, hr.notes as hr_notes, hr.phone FROM product_team_members ptm LEFT JOIN users u ON (u.id = ptm.user_id OR u.display_name = ptm.user_id OR u.username = ptm.user_id) LEFT JOIN hr_records hr ON (hr.user_id = u.id OR hr.user_id = u.display_name) WHERE ptm.product_id = ? ORDER BY CASE WHEN ptm.role_in_product = 'Product Lead' THEN 0 ELSE 1 END, COALESCE(u.display_name, ptm.user_id) ASC`, [productId]),
+              dbQuery<any>('SELECT id, display_name, username, role, email, avatar_initials FROM users WHERE active = 1 ORDER BY display_name ASC')
+            ])
+            setTeamMembers(members)
+            setCompanyUsers(allUsers)
+          } catch (tmErr) {
+            console.warn('Error loading product team members:', tmErr)
+          }
+        })(),
 
-        // Ensure application owner is seeded as Product Lead
-        const appOwner = p.owner_id || currentUser?.displayName || currentUser?.username || 'Product Owner'
-        await dbExecute(
-          `INSERT OR IGNORE INTO product_team_members (id, product_id, user_id, role_in_product)
-           VALUES (?, ?, ?, 'Product Lead')`,
-          [`ptm-lead-${productId}`, productId, appOwner]
-        )
-
-        const members = await dbQuery<any>(`
-          SELECT 
-            ptm.id as membership_id,
-            ptm.role_in_product,
-            ptm.assigned_at,
-            u.id as user_id,
-            COALESCE(u.display_name, ptm.user_id) as display_name,
-            u.username,
-            COALESCE(u.role, 'TeamMember') as system_role,
-            u.email,
-            u.avatar_initials,
-            hr.status as hr_status,
-            hr.work_location,
-            hr.leave_from,
-            hr.leave_to,
-            hr.notes as hr_notes,
-            hr.phone
-          FROM product_team_members ptm
-          LEFT JOIN users u ON (u.id = ptm.user_id OR u.display_name = ptm.user_id OR u.username = ptm.user_id)
-          LEFT JOIN hr_records hr ON (hr.user_id = u.id OR hr.user_id = u.display_name)
-          WHERE ptm.product_id = ?
-          ORDER BY 
-            CASE WHEN ptm.role_in_product = 'Product Lead' THEN 0 ELSE 1 END,
-            COALESCE(u.display_name, ptm.user_id) ASC
-        `, [productId])
-        setTeamMembers(members)
-
-        // All active users for the Add Team Member dropdown
-        const allUsers = await dbQuery<any>(
-          'SELECT id, display_name, username, role, email, avatar_initials FROM users WHERE active = 1 ORDER BY display_name ASC'
-        )
-        setCompanyUsers(allUsers)
-      } catch (tmErr) {
-        console.warn('Error loading product team members:', tmErr)
-      }
-
-      // Custom Sections
-      try {
-        await dbExecute(`CREATE TABLE IF NOT EXISTS product_custom_sections (
-          id TEXT PRIMARY KEY,
-          product_id TEXT NOT NULL,
-          title TEXT NOT NULL,
-          section_type TEXT NOT NULL,
-          content_json TEXT NOT NULL,
-          icon TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`)
-        const customRows = await dbQuery<any>('SELECT * FROM product_custom_sections WHERE product_id = ? ORDER BY created_at ASC', [productId])
-        setCustomSections(customRows)
-      } catch (e) {
-        console.warn('Could not query product_custom_sections:', e)
-      }
+        // Custom Sections (DDL-guarded)
+        (async () => {
+          try {
+            await dbExecute(`CREATE TABLE IF NOT EXISTS product_custom_sections (id TEXT PRIMARY KEY, product_id TEXT NOT NULL, title TEXT NOT NULL, section_type TEXT NOT NULL, content_json TEXT NOT NULL, icon TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+            const customRows = await dbQuery<any>('SELECT * FROM product_custom_sections WHERE product_id = ? ORDER BY created_at ASC', [productId])
+            setCustomSections(customRows)
+          } catch (e) {
+            console.warn('Could not query product_custom_sections:', e)
+          }
+        })(),
+      ])
     } catch (err) {
       console.error('Error loading workspace data:', err)
     } finally {
       setLoading(false)
     }
   }
-
   const loadAzureSecrets = async () => {
     try {
       const token = getSessionToken()
