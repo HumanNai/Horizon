@@ -54,17 +54,6 @@ jobs:
             release/*.zip
           if-no-files-found: error
 
-      - name: Attach Windows Artifacts to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/mac-support'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $pkgVer = node -p "'v' + require('./package.json').version"
-          $tag = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF.Substring(10) } else { $pkgVer }
-          $files = (Get-Item release/*.exe, release/*.zip).FullName
-          gh release upload $tag $files --clobber
-
   package-macos:
     name: Package macOS (DMG & ZIP)
     runs-on: macos-latest
@@ -98,14 +87,41 @@ jobs:
             release/*.zip
           if-no-files-found: error
 
-      - name: Attach macOS Artifacts to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/mac-support'
+  publish-release:
+    name: Publish Release Assets
+    needs: [package-windows, package-macos]
+    # Only publish to the official release on tag pushes (v*), main branch, or manual dispatch.
+    # Feature branches build and upload workflow artifacts, but do not overwrite the official release.
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download All Platform Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: horizon-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PKG_VER="v$(node -p "require('./package.json').version")"
           TAG="${GITHUB_REF#refs/tags/}"
           [ "$TAG" = "$GITHUB_REF" ] && TAG="$PKG_VER"
-          gh release upload "$TAG" release/*.dmg release/*.zip --clobber
 
+          echo "Publishing assets to release tag: $TAG"
 
+          # Verify or create release if missing
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG not found. Creating new release..."
+            gh release create "$TAG" --title "Horizon PM $TAG" --generate-notes
+          fi
+
+          # Upload all packages sequentially in a single job without collisions
+          echo "Uploading binaries to release $TAG..."
+          gh release upload "$TAG" release-assets/* --clobber
