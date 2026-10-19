@@ -529,7 +529,7 @@ app.post('/api/integration/positions', authMiddleware, (req: Request, res: Respo
 });
 
 // ── 5. Plugins API Routes ────────────────────────────────────
-app.get('/api/plugins/list', (req: Request, res: Response) => {
+app.get('/api/plugins/list', authMiddleware, (req: Request, res: Response) => {
   res.json(pluginHost.listPlugins());
 });
 
@@ -564,7 +564,7 @@ app.post('/api/plugins/:id/connect', authMiddleware, async (req: Request, res: R
   }
 });
 
-app.get('/api/plugins/active-backend', (req: Request, res: Response) => {
+app.get('/api/plugins/active-backend', authMiddleware, (req: Request, res: Response) => {
   res.json(pluginHost.getActiveBackendId());
 });
 

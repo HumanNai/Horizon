@@ -116,6 +116,12 @@ function seedDefaultUser() {
 /** Remove legacy dummy/sample data and testing entries if present */
 function cleanDummyData() {
   try {
+    // Only run sample data cleanup once on fresh installs; never on existing setups
+    const isCleaned = db.prepare("SELECT value FROM app_settings WHERE key = 'dummy_data_cleaned'").get() as any;
+    if (isCleaned?.value === '1') {
+      return;
+    }
+
     const dummyProductIds = ['p-joc-01', 'p-jta-02', 'p-dfe-03', 'p-ddr-04', 'prod-1789140674118'];
     for (const pid of dummyProductIds) {
       db.prepare('DELETE FROM tasks WHERE product_id = ?').run(pid);
@@ -151,13 +157,7 @@ function cleanDummyData() {
     db.prepare("DELETE FROM product_custom_sections WHERE product_id NOT IN (SELECT id FROM products)").run();
     db.prepare("DELETE FROM schedule_events WHERE linked_type = 'Product' AND linked_id NOT IN (SELECT id FROM products)").run();
 
-    // Wipe all residual plugin credentials, tokens, and encryption secrets
-    db.prepare(`
-      UPDATE plugin_configs 
-      SET settings_json = '{}', status = 'disconnected', error = NULL, connected_as = NULL, connected_at = NULL
-    `).run();
-    db.prepare("DELETE FROM _kv").run();
-    db.prepare("DELETE FROM secrets_meta").run();
+    // Preserve active plugin credentials, _kv master keys, and secrets_meta
     db.prepare("DELETE FROM app_settings WHERE key = 'cloud_settings_locked_login'").run();
     db.prepare(`
       INSERT INTO app_settings (key, value, updated_at)
