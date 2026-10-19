@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import morgan from 'morgan';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
@@ -13,9 +15,28 @@ import { SessionInfo, HorizonUser, UserRole } from '../src/types';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || process.env.CORS_ORIGIN || '';
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || !ALLOWED_ORIGIN || origin === ALLOWED_ORIGIN || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: origin ${origin} is not allowed`));
+    }
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: process.env.MAX_REQUEST_SIZE || '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.MAX_REQUEST_SIZE || '50mb' }));
+app.use(morgan('[:date[iso]] :method :url :status :res[content-length] - :response-time ms'));
+
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait 5 minutes before retrying.' }
+});
 // ── Structured Server-Side Error Logging ────────────────────
 function logServerError(context: string, err: any, req?: Request) {
   const ts = new Date().toISOString();
@@ -94,8 +115,23 @@ process.on('unhandledRejection', (reason: any) => {
 process.on('uncaughtException', (err: Error) => {
   logServerError('UncaughtException', err);
 });
+function getOrCreateSessionSecret(): Buffer {
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS _kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+    const row = db.prepare("SELECT value FROM _kv WHERE key = 'session_secret'").get() as any;
+    if (row && row.value) {
+      return Buffer.from(row.value, 'hex');
+    }
+    const secret = crypto.randomBytes(32);
+    db.prepare("INSERT INTO _kv (key, value) VALUES ('session_secret', ?)").run(secret.toString('hex'));
+    return secret;
+  } catch {
+    return crypto.randomBytes(32);
+  }
+}
+
 const sessions = new Map<string, SessionInfo>();
-const SECRET_KEY = crypto.randomBytes(32);
+const SECRET_KEY = getOrCreateSessionSecret();
 
 function generateToken(userId: string): string {
   const payload = `${userId}:${Date.now()}`;
@@ -106,25 +142,34 @@ function generateToken(userId: string): string {
 const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = (authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : '') || 
-                (req.body?.token as string) || 
-                (req.query?.token as string);
+                (req.body?.token as string);
 
-  let effectiveToken = token;
-  if (!effectiveToken && sessions.size > 0) {
-    effectiveToken = Array.from(sessions.keys())[0];
-  }
-
-  if (!effectiveToken || !sessions.has(effectiveToken)) {
+  if (!token || !sessions.has(token)) {
     return res.status(401).json({ error: 'Unauthorized: Session invalid or expired' });
   }
 
-  (req as any).userSession = sessions.get(effectiveToken);
-  (req as any).sessionToken = effectiveToken;
+  const session = sessions.get(token)!;
+  if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
+    sessions.delete(token);
+    return res.status(401).json({ error: 'Unauthorized: Session has expired. Please log in again.' });
+  }
+
+  (req as any).userSession = session;
+  (req as any).sessionToken = token;
   next();
 };
 
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, s] of sessions.entries()) {
+    if (s.expiresAt && new Date(s.expiresAt).getTime() < now) {
+      sessions.delete(t);
+    }
+  }
+}, 15 * 60 * 1000).unref();
+
 // ── 1. Authentication Routes ─────────────────────────────────
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+app.post('/api/auth/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
@@ -905,17 +950,26 @@ app.post('/api/sync/trigger', async (req: Request, res: Response) => {
 
 // ── 5b. System Health Endpoint ──────────────────────────────
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'healthy',
-    app: 'Horizon PM',
-    version: '1.1.0',
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-    database: {
-      engine: 'sqlite',
-      path: dbPath
-    }
-  });
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({
+      status: 'healthy',
+      app: 'Horizon PM',
+      version: '1.1.0',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      database: {
+        connected: true,
+        engine: 'sqlite'
+      }
+    });
+  } catch (err: any) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: 'Database connection check failed',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ── 6. Static Asset Serving for Hosted Web Mode ──────────────
@@ -955,10 +1009,30 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
   auditServerError(`${req.method} ${req.path}`, err, session?.user?.id);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(` 🚀 Horizon PM Hosted Web Server running on port ${PORT}`);
-  console.log(` 📦 Database: SQLite (${dbPath})`);
+  console.log(` 📦 Database: SQLite active`);
   console.log(` 🌐 Serving Web Client from: ${clientDist}`);
   console.log(`=======================================================`);
 });
+
+const handleGracefulShutdown = (signal: string) => {
+  console.log(`Received ${signal}. Starting graceful shutdown...`);
+  server.close(() => {
+    try {
+      db.close();
+      console.log('SQLite database connection closed successfully.');
+    } catch (e) {
+      console.error('Error during database close:', e);
+    }
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('Graceful shutdown timed out after 10s, forcing exit.');
+    process.exit(1);
+  }, 10000).unref();
+};
+
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));

@@ -1,5 +1,7 @@
-# Production Dockerfile for Horizon PM Web Edition
-FROM node:20-bookworm-slim
+# ── Multi-Stage Production Dockerfile for Horizon PM Web Edition ──
+
+# Stage 1: Build & Compile
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -13,16 +15,40 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy package manifests
 COPY package*.json ./
 
-# Install production dependencies only (Fast, minimal, no desktop electron binaries)
-RUN npm ci --omit=dev
+# Install full dependencies with desktop Electron binary download skipped
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+RUN npm ci
 
-# Copy application server, pre-built web client, and configuration
-COPY out ./out
-COPY public ./public
-COPY electron ./electron
-COPY src/types ./src/types
-COPY server ./server
-COPY tsconfig.json ./tsconfig.json
+# Copy source files
+COPY . .
+
+# Build web distribution assets into out/renderer
+RUN npm run build
+
+# Prune devDependencies to keep only production packages + native bindings
+RUN npm prune --omit=dev
+
+
+# Stage 2: Minimal Production Runtime
+FROM node:20-bookworm-slim AS runner
+
+WORKDIR /app
+
+# Create persistent data directory and grant ownership to node user
+RUN mkdir -p /app/data && chown -R node:node /app
+
+# Copy production node_modules from builder (including compiled better-sqlite3 native bindings)
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/package*.json ./
+COPY --from=builder --chown=node:node /app/out ./out
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/electron ./electron
+COPY --from=builder --chown=node:node /app/src/types ./src/types
+COPY --from=builder --chown=node:node /app/server ./server
+COPY --from=builder --chown=node:node /app/tsconfig.json ./tsconfig.json
+
+# Run as non-root user for security
+USER node
 
 # Persistent volume for SQLite database and attachments
 VOLUME ["/app/data"]
