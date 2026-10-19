@@ -1,3 +1,11 @@
+function getToken(token?: string): string {
+  if (token && typeof token === 'string' && token.trim()) return token;
+  try {
+    return sessionStorage.getItem('horizon_session_token') || '';
+  } catch {
+    return '';
+  }
+}
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../src/types';
 
@@ -25,7 +33,7 @@ const horizonAPI = {
     reveal: (token: string, id: string) => ipcRenderer.invoke(IPC.SECRETS_REVEAL, token, id),
     rotate: (token: string, id: string, newValue: string) => ipcRenderer.invoke(IPC.SECRETS_ROTATE, token, id, newValue),
     delete: (token: string, id: string) => ipcRenderer.invoke(IPC.SECRETS_DELETE, token, id),
-    getAzureStatus: () => ipcRenderer.invoke(IPC.SECRETS_GET_AZURE_STATUS),
+    getAzureStatus: (token?: string) => ipcRenderer.invoke(IPC.SECRETS_GET_AZURE_STATUS, getToken(token)),
     listAzure: (token: string) => ipcRenderer.invoke(IPC.SECRETS_LIST_AZURE, token),
     revealAzure: (token: string, secretName: string) => ipcRenderer.invoke(IPC.SECRETS_REVEAL_AZURE, token, secretName),
     addAzure: (token: string, name: string, value: string, category?: string) => ipcRenderer.invoke(IPC.SECRETS_ADD_AZURE, token, name, value, category),
@@ -42,8 +50,8 @@ const horizonAPI = {
     uploadDocument: (token: string, library: string, fileName: string, content: any, metadata?: any) => ipcRenderer.invoke(IPC.GRAPH_UPLOAD_DOCUMENT, token, library, fileName, content, metadata)
   },
   sync: {
-    trigger: () => ipcRenderer.invoke(IPC.SYNC_TRIGGER),
-    getState: () => ipcRenderer.invoke(IPC.SYNC_GET_STATE),
+    trigger: (token?: string) => ipcRenderer.invoke(IPC.SYNC_TRIGGER, getToken(token)),
+    getState: (token?: string) => ipcRenderer.invoke(IPC.SYNC_GET_STATE, getToken(token)),
     onStatus: (callback: (status: any) => void) => {
       ipcRenderer.on(IPC.SYNC_STATUS, (event, status) => callback(status));
     }
@@ -51,33 +59,33 @@ const horizonAPI = {
   notify: {
     schedule: (token: string, event: any) => ipcRenderer.invoke(IPC.NOTIFY_SCHEDULE, token, event),
     cancel: (token: string, id: string) => ipcRenderer.invoke(IPC.NOTIFY_CANCEL, token, id),
-    send: (payload: { title: string; body?: string }) => ipcRenderer.invoke(IPC.NOTIFY_SEND, '', payload)
+    send: (payload: { title: string; body?: string }, token?: string) => ipcRenderer.invoke(IPC.NOTIFY_SEND, getToken(token), payload)
   },
-  plugins: {
-    list: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_LIST, token || (sessionStorage.getItem('horizon_session_token') || '')),
-    saveConfig: (pluginId: string, settings: any, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SAVE_CONFIG, token || (sessionStorage.getItem('horizon_session_token') || ''), pluginId, settings),
-    connect: (pluginId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_CONNECT, token || (sessionStorage.getItem('horizon_session_token') || ''), pluginId),
-    disconnect: (pluginId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_DISCONNECT, token || (sessionStorage.getItem('horizon_session_token') || ''), pluginId),
-    getStatus: (pluginId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_STATUS, token || (sessionStorage.getItem('horizon_session_token') || ''), pluginId),
-    getActiveBackend: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_ACTIVE_BACKEND, token || (sessionStorage.getItem('horizon_session_token') || '')),
-    setActiveBackend: (providerId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SET_ACTIVE_BACKEND, token || (sessionStorage.getItem('horizon_session_token') || ''), providerId),
-    testConnection: (pluginId?: string, overrideSettings?: any, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_TEST_CONNECTION, token || (sessionStorage.getItem('horizon_session_token') || ''), pluginId, overrideSettings),
-    seedBackend: (pluginId?: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SEED_BACKEND, token || (sessionStorage.getItem('horizon_session_token') || ''), pluginId),
-    testMongo: (uri?: string, dbName?: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_TEST_MONGO, token || (sessionStorage.getItem('horizon_session_token') || ''), uri, dbName),
-    syncMongoSeed: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SYNC_MONGO_SEED, token || (sessionStorage.getItem('horizon_session_token') || '')),
-    getLogs: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_LOGS, token || (sessionStorage.getItem('horizon_session_token') || '')),
-    deleteCloudRecord: (entity: string, recordId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_DELETE_CLOUD_RECORD, token || (sessionStorage.getItem('horizon_session_token') || ''), entity, recordId),
-    getAppSetting: (key: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_APP_SETTING, token || (sessionStorage.getItem('horizon_session_token') || ''), key),
-    setAppSetting: (key: string, value: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SET_APP_SETTING, token || (sessionStorage.getItem('horizon_session_token') || ''), key, value),
+    plugins: {
+    list: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_LIST, getToken(token)),
+    saveConfig: (pluginId: string, settings: any, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SAVE_CONFIG, getToken(token), pluginId, settings),
+    connect: (pluginId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_CONNECT, getToken(token), pluginId),
+    disconnect: (pluginId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_DISCONNECT, getToken(token), pluginId),
+    getStatus: (pluginId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_STATUS, getToken(token), pluginId),
+    getActiveBackend: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_ACTIVE_BACKEND, getToken(token)),
+    setActiveBackend: (providerId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SET_ACTIVE_BACKEND, getToken(token), providerId),
+    testConnection: (pluginId?: string, overrideSettings?: any, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_TEST_CONNECTION, getToken(token), pluginId, overrideSettings),
+    seedBackend: (pluginId?: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SEED_BACKEND, getToken(token), pluginId),
+    testMongo: (uri?: string, dbName?: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_TEST_MONGO, getToken(token), uri, dbName),
+    syncMongoSeed: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SYNC_MONGO_SEED, getToken(token)),
+    getLogs: (token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_LOGS, getToken(token)),
+    deleteCloudRecord: (entity: string, recordId: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_DELETE_CLOUD_RECORD, getToken(token), entity, recordId),
+    getAppSetting: (key: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_GET_APP_SETTING, getToken(token), key),
+    setAppSetting: (key: string, value: string, token?: string) => ipcRenderer.invoke(IPC.PLUGIN_SET_APP_SETTING, getToken(token), key, value),
     onLog: (callback: (log: any) => void) => {
       ipcRenderer.on(IPC.PLUGIN_LOG_EVENT, (_event, log) => callback(log));
     }
   },
   storage: {
-    uploadDocument: (fileName: string, content: any, category?: string) =>
-      ipcRenderer.invoke(IPC.STORAGE_UPLOAD_DOCUMENT, fileName, content, category),
-    downloadDocument: (driveItemId: string) =>
-      ipcRenderer.invoke(IPC.STORAGE_DOWNLOAD_DOCUMENT, driveItemId)
+    uploadDocument: (fileName: string, content: any, category?: string, token?: string) =>
+      ipcRenderer.invoke(IPC.STORAGE_UPLOAD_DOCUMENT, getToken(token), fileName, content, category),
+    downloadDocument: (driveItemId: string, token?: string) =>
+      ipcRenderer.invoke(IPC.STORAGE_DOWNLOAD_DOCUMENT, getToken(token), driveItemId)
   },
   onedrive: {
     uploadFile: (token: string, fileName: string, content: any, folderPath?: string) =>

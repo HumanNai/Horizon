@@ -37,7 +37,7 @@ export function validateSafeQuery(sql: string): string {
   return cleaned;
 }
 
-export function validateSafeExecute(sql: string): string {
+export function validateSafeExecute(sql: string, userRole?: string): string {
   const cleaned = sanitizeSql(sql);
 
   if (!/^(insert|update|delete|replace)\b/i.test(cleaned)) {
@@ -50,6 +50,16 @@ export function validateSafeExecute(sql: string): string {
 
   if (/\b(users|_kv|_migrations|audit_log|plugin_configs)\b/i.test(cleaned)) {
     throw new Error('Access denied: Direct mutation of security/audit/user tables is forbidden.');
+  }
+
+  // Scoped table permissions based on role
+  if (userRole === 'TeamMember') {
+    const tableMatch = cleaned.match(/\b(into|update|from)\s+([a-zA-Z0-9_]+)/i);
+    const targetTable = tableMatch ? tableMatch[2].toLowerCase() : '';
+    const RESTRICTED_FOR_TEAM = ['products', 'apis', 'interfaces', 'app_settings'];
+    if (targetTable && RESTRICTED_FOR_TEAM.includes(targetTable)) {
+      throw new Error(`Access denied: Team Members cannot modify table '${targetTable}'.`);
+    }
   }
 
   return cleaned;

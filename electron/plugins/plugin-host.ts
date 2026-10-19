@@ -37,28 +37,23 @@ export class PluginHost {
     this.loadPortableConfig();
   }
 
-  private getPortableConfigPaths(): string[] {
-    const paths: string[] = [];
+  private getPortableConfigPath(): string {
     try {
       if (electronApp && typeof electronApp.getPath === 'function') {
-        paths.push(path.join(electronApp.getPath('userData'), 'horizon-config.json'));
+        return path.join(electronApp.getPath('userData'), 'horizon-config.json');
       }
     } catch (_) {}
-    try {
-      paths.push(path.join(process.cwd(), 'horizon-config.json'));
-    } catch (_) {}
-    try {
-      if (process.execPath) {
-        paths.push(path.join(path.dirname(process.execPath), 'horizon-config.json'));
-      }
-    } catch (_) {}
-    return Array.from(new Set(paths));
+    const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      try { fs.mkdirSync(dataDir, { recursive: true }); } catch (_) {}
+    }
+    return path.join(dataDir, 'horizon-config.json');
   }
 
   loadPortableConfig(): void {
-    for (const filePath of this.getPortableConfigPaths()) {
-      try {
-        if (fs.existsSync(filePath)) {
+    const filePath = this.getPortableConfigPath();
+    try {
+      if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, 'utf-8');
           const data = JSON.parse(content);
           if (data && data.app_settings) {
@@ -93,11 +88,9 @@ export class PluginHost {
               this.setActiveBackendId(data.active_backend);
             }
           }
-          break;
-        }
-      } catch (err: any) {
-        pluginLogger.warn('PluginHost', `Failed to read config from ${filePath}: ${err.message}`);
       }
+    } catch (err: any) {
+      pluginLogger.warn('PluginHost', `Failed to read config from ${filePath}: ${err.message}`);
     }
   }
 
@@ -105,10 +98,22 @@ export class PluginHost {
     try {
       const rows = this.db.prepare('SELECT plugin_id, settings_json FROM plugin_configs').all() as any[];
       const plugins: Record<string, any> = {};
+      const SENSITIVE_KEYS = ['refreshtoken', 'clientsecret', 'password', 'apikey', 'secret', 'connectionstring'];
+      
       for (const r of rows) {
         if (r.settings_json) {
           try {
-            plugins[r.plugin_id] = JSON.parse(r.settings_json);
+            const parsed = JSON.parse(r.settings_json);
+            // Redact credentials before persisting to file
+            const sanitized: Record<string, any> = {};
+            for (const [k, v] of Object.entries(parsed)) {
+              if (SENSITIVE_KEYS.some(sk => k.toLowerCase().includes(sk))) {
+                sanitized[k] = '[PROTECTED_VAULT_CREDENTIAL]';
+              } else {
+                sanitized[k] = v;
+              }
+            }
+            plugins[r.plugin_id] = sanitized;
           } catch (_) {}
         }
       }
@@ -125,12 +130,13 @@ export class PluginHost {
       };
       const jsonStr = JSON.stringify(data, null, 2);
 
-      for (const filePath of this.getPortableConfigPaths()) {
-        try {
-          fs.writeFileSync(filePath, jsonStr, 'utf-8');
-        } catch (_) {}
-      }
-    } catch (_) {}
+      const targetPath = this.getPortableConfigPath();
+      const tmpPath = `${targetPath}.${Date.now()}.tmp`;
+      fs.writeFileSync(tmpPath, jsonStr, { encoding: 'utf-8', mode: 0o600 });
+      fs.renameSync(tmpPath, targetPath);
+    } catch (err: any) {
+      pluginLogger.warn('PluginHost', `Failed to atomically save config: ${err.message}`);
+    }
   }
 
   getActiveBackendId(): string {
@@ -431,21 +437,48 @@ export class PluginHost {
 }
 
 export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, pluginHost: PluginHost) {
-  ipcMain.handle(IPC.PLUGIN_LIST, () => pluginHost.listPlugins());
+  const requireAuth = (token: string) => {
+    if (!token || !sessions.has(token)) throw new Error('Unauthorized');
+    const session = sessions.get(token)!;
+    if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
+      sessions.delete(token);
+      throw new Error('Unauthorized: Session expired');
+    }
+    return session;
+  };
 
-  ipcMain.handle(IPC.PLUGIN_GET_ACTIVE_BACKEND, () => pluginHost.getActiveBackendId());
+  const requireAdmin = (token: string) => {
+    const session = requireAuth(token);
+    if (session.user.role !== 'SuperAdmin' && session.user.role !== 'ProductOwner') {
+      throw new Error('Access denied: Administrator privileges required');
+    }
+    return session;
+  };
 
-  ipcMain.handle(IPC.PLUGIN_SET_ACTIVE_BACKEND, (_event, providerId: string) => {
+  ipcMain.handle(IPC.PLUGIN_LIST, (_event, token: string) => {
+    requireAuth(token);
+    return pluginHost.listPlugins();
+  });
+
+  ipcMain.handle(IPC.PLUGIN_GET_ACTIVE_BACKEND, (_event, token: string) => {
+    requireAuth(token);
+    return pluginHost.getActiveBackendId();
+  });
+
+  ipcMain.handle(IPC.PLUGIN_SET_ACTIVE_BACKEND, (_event, token: string, providerId: string) => {
+    requireAdmin(token);
     pluginHost.setActiveBackendId(providerId);
     return true;
   });
 
-  ipcMain.handle(IPC.PLUGIN_SAVE_CONFIG, (_event, pluginId: string, settings: Record<string, string>) => {
+  ipcMain.handle(IPC.PLUGIN_SAVE_CONFIG, (_event, token: string, pluginId: string, settings: Record<string, string>) => {
+    requireAdmin(token);
     pluginHost.saveConfig(pluginId, settings);
     return true;
   });
 
-  ipcMain.handle(IPC.PLUGIN_CONNECT, async (_event, pluginId: string) => {
+  ipcMain.handle(IPC.PLUGIN_CONNECT, async (_event, token: string, pluginId: string) => {
+    requireAdmin(token);
     try {
       pluginHost.loadPlugin(pluginId);
 
@@ -591,29 +624,35 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
     return true;
   });
 
-  ipcMain.handle(IPC.PLUGIN_GET_STATUS, (_event, pluginId: string) => {
+  ipcMain.handle(IPC.PLUGIN_GET_STATUS, (_event, token: string, pluginId: string) => {
+    requireAuth(token);
     return pluginHost.getStatus(pluginId);
   });
 
-  ipcMain.handle(IPC.PLUGIN_TEST_CONNECTION, async (_event, pluginId?: string, overrideSettings?: Record<string, string>) => {
+  ipcMain.handle(IPC.PLUGIN_TEST_CONNECTION, async (_event, token: string, pluginId?: string, overrideSettings?: Record<string, string>) => {
+    requireAdmin(token);
     return await pluginHost.testBackend(pluginId, overrideSettings);
   });
 
-  ipcMain.handle(IPC.PLUGIN_SEED_BACKEND, async (_event, pluginId?: string) => {
+  ipcMain.handle(IPC.PLUGIN_SEED_BACKEND, async (_event, token: string, pluginId?: string) => {
+    requireAdmin(token);
     return await pluginHost.seedBackend(pluginId);
   });
 
-  ipcMain.handle(IPC.PLUGIN_TEST_MONGO, async (_event, uri?: string, dbName?: string) => {
+  ipcMain.handle(IPC.PLUGIN_TEST_MONGO, async (_event, token: string, uri?: string, dbName?: string) => {
+    requireAdmin(token);
     const connector = pluginHost.getMongoConnector();
     return await connector.testConnection(uri, dbName);
   });
 
-  ipcMain.handle(IPC.PLUGIN_SYNC_MONGO_SEED, async () => {
+  ipcMain.handle(IPC.PLUGIN_SYNC_MONGO_SEED, async (_event, token: string) => {
+    requireAdmin(token);
     const connector = pluginHost.getMongoConnector();
     return await connector.seedAllTablesToMongo(db);
   });
 
-  ipcMain.handle(IPC.PLUGIN_GET_LOGS, () => {
+  ipcMain.handle(IPC.PLUGIN_GET_LOGS, (_event, token: string) => {
+    requireAuth(token);
     return pluginLogger.getLogs();
   });
 
@@ -662,10 +701,11 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
     }
   });
 
-  // ── Unified Storage Router (routes to active backend) ─────────
+  // ── Unified Storage Router (authenticated) ─────────────────────
   ipcMain.handle(
     IPC.STORAGE_UPLOAD_DOCUMENT,
-    async (_event, fileName: string, content: any, category?: string) => {
+    async (_event, token: string, fileName: string, content: any, category?: string) => {
+      requireAuth(token);
       const provider = pluginHost.getActiveProvider();
       if (!provider) {
         throw new Error('No cloud backend provider is active. Running in local offline mode.');
@@ -676,7 +716,8 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
 
   ipcMain.handle(
     IPC.STORAGE_DOWNLOAD_DOCUMENT,
-    async (_event, driveItemId: string) => {
+    async (_event, token: string, driveItemId: string) => {
+      requireAuth(token);
       const provider = pluginHost.getActiveProvider();
       if (!provider) {
         throw new Error('No cloud backend provider is active.');

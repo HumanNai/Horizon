@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { PluginHost } from '../plugins/plugin-host';
 import { pluginLogger } from '../plugins/logger';
 import { IPC, SyncState } from '../../src/types';
+import { sessions } from './auth';
 import { TRACKED_ENTITIES } from '../plugins/types';
 
 const SYNC_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes
@@ -105,7 +106,8 @@ export function registerSyncHandlers(
   db: Database.Database,
   pluginHost: PluginHost
 ) {
-  ipcMain.handle(IPC.SYNC_TRIGGER, async (_event) => {
+  ipcMain.handle(IPC.SYNC_TRIGGER, async (_event, token: string) => {
+    if (!token || !sessions.has(token)) throw new Error('Unauthorized');
     const wins = BrowserWindow.getAllWindows();
     if (wins[0] && !wins[0].isDestroyed()) {
       await runSync(db, pluginHost, wins[0]).catch(() => {});
@@ -113,7 +115,8 @@ export function registerSyncHandlers(
     return true;
   });
 
-  ipcMain.handle(IPC.SYNC_GET_STATE, () => {
+  ipcMain.handle(IPC.SYNC_GET_STATE, (_event, token: string) => {
+    if (!token || !sessions.has(token)) throw new Error('Unauthorized');
     const pending = (
       db.prepare('SELECT COUNT(*) as cnt FROM local_mutations WHERE synced = 0').get() as any
     ).cnt;

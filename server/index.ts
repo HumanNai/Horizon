@@ -343,6 +343,10 @@ app.post('/api/auth/azure-ad/callback', async (req: Request, res: Response) => {
     const connector = pluginHost.getAzureADConnector();
     const { profile, role } = await connector.exchangeCode(code);
 
+    // Validate role against application allowlist
+    const ALLOWED_ROLES = ['SuperAdmin', 'ProductOwner', 'Management', 'ProductLead', 'TeamMember'];
+    const safeRole = ALLOWED_ROLES.includes(role) ? role : 'TeamMember';
+
     // Find or provision user in Horizon database
     let userRow = db.prepare('SELECT * FROM users WHERE email = ? OR username = ?').get(profile.mail || profile.userPrincipalName, profile.userPrincipalName) as any;
     let userId = userRow?.id;
@@ -355,14 +359,15 @@ app.post('/api/auth/azure-ad/callback', async (req: Request, res: Response) => {
       db.prepare(`
         INSERT INTO users (id, username, password_hash, display_name, role, active, email, avatar_initials, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).run(userId, profile.userPrincipalName, tempHash, profile.displayName, role, profile.mail || profile.userPrincipalName, initials);
+      `).run(userId, profile.userPrincipalName, tempHash, profile.displayName, safeRole, profile.mail || profile.userPrincipalName, initials);
     } else {
-      // Update role if synced from Azure AD group
+      // Preserve local SuperAdmin/ProductOwner authority unless explicitly updated by another local admin
+      const finalRole = (userRow.role === 'SuperAdmin' || userRow.role === 'ProductOwner') ? userRow.role : safeRole;
       db.prepare(`
         UPDATE users 
         SET role = ?, display_name = ?, updated_at = CURRENT_TIMESTAMP 
         WHERE id = ?
-      `).run(role, profile.displayName, userId);
+      `).run(finalRole, profile.displayName, userId);
     }
 
     userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
@@ -462,7 +467,7 @@ app.post('/api/db/query', authMiddleware, (req: Request, res: Response) => {
 app.post('/api/db/execute', authMiddleware, (req: Request, res: Response) => {
   try {
     const { sql, params = [] } = req.body;
-    const safeSql = validateSafeExecute(sql);
+    const safeSql = validateSafeExecute(sql, session.user.role);
     const info = db.prepare(safeSql).run(...params);
     res.json({ changes: info.changes, lastInsertRowid: info.lastInsertRowid });
   } catch (err: any) {
@@ -512,7 +517,14 @@ app.post('/api/integration/maps', authMiddleware, (req: Request, res: Response) 
 });
 
 app.delete('/api/integration/maps/:id', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
   const mapId = req.params.id;
+  const map = db.prepare('SELECT product_id FROM integration_maps WHERE id = ?').get(mapId) as any;
+  if (!map) return res.status(404).json({ error: 'Map not found' });
+  if (!hasProductAccess(session.user.id, session.user.role, session.user.username, session.user.displayName, map.product_id)) {
+    return res.status(403).json({ error: 'Access denied: You are not authorized for this product map.' });
+  }
+
   const deleteTx = db.transaction(() => {
     db.prepare('DELETE FROM integration_nodes WHERE map_id = ?').run(mapId);
     db.prepare('DELETE FROM integration_edges WHERE map_id = ?').run(mapId);
@@ -524,11 +536,16 @@ app.delete('/api/integration/maps/:id', authMiddleware, (req: Request, res: Resp
 });
 
 app.get('/api/integration/maps/:id/data', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
   const mapId = req.params.id;
   const map = db.prepare(`
     SELECT id, product_id as productId, name, description, imported_at as importedAt, created_by as createdBy, created_at as createdAt
     FROM integration_maps WHERE id = ?
   `).get(mapId) as any;
+  if (!map) return res.status(404).json({ error: 'Map not found' });
+  if (!hasProductAccess(session.user.id, session.user.role, session.user.username, session.user.displayName, map.productId)) {
+    return res.status(403).json({ error: 'Access denied: You are not authorized for this product map.' });
+  }
 
   const nodes = db.prepare(`
     SELECT id, map_id as mapId, node_key as nodeKey, label, node_type as nodeType, team_owner as teamOwner,
@@ -556,7 +573,14 @@ app.get('/api/integration/maps/:id/data', authMiddleware, (req: Request, res: Re
 });
 
 app.post('/api/integration/import', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
   const { mapId, nodes, edges, groups = [] } = req.body;
+  const map = db.prepare('SELECT product_id FROM integration_maps WHERE id = ?').get(mapId) as any;
+  if (!map) return res.status(404).json({ error: 'Map not found' });
+  if (!hasProductAccess(session.user.id, session.user.role, session.user.username, session.user.displayName, map.product_id)) {
+    return res.status(403).json({ error: 'Access denied: You are not authorized to import into this product map.' });
+  }
+
   const importTx = db.transaction(() => {
     db.prepare('DELETE FROM integration_nodes WHERE map_id = ?').run(mapId);
     db.prepare('DELETE FROM integration_edges WHERE map_id = ?').run(mapId);
@@ -620,7 +644,16 @@ app.post('/api/integration/import', authMiddleware, (req: Request, res: Response
 });
 
 app.post('/api/integration/positions', authMiddleware, (req: Request, res: Response) => {
+  const session = (req as any).userSession;
   const { positions = [] } = req.body;
+  if (!positions || positions.length === 0) return res.json({ success: true });
+
+  const sampleMapId = positions[0].mapId;
+  const map = db.prepare('SELECT product_id FROM integration_maps WHERE id = ?').get(sampleMapId) as any;
+  if (map && !hasProductAccess(session.user.id, session.user.role, session.user.username, session.user.displayName, map.product_id)) {
+    return res.status(403).json({ error: 'Access denied: You are not authorized to update node positions for this product map.' });
+  }
+
   const updateStmt = db.prepare(`
     UPDATE integration_nodes
     SET pos_x = ?, pos_y = ?

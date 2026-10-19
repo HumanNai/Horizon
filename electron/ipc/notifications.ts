@@ -72,7 +72,8 @@ export function registerNotificationHandlers(ipcMain: IpcMain, db: Database.Data
     return true;
   });
 
-  ipcMain.handle(IPC.NOTIFY_SEND, (_event, _token: string, payload: { title: string; body?: string }) => {
+  ipcMain.handle(IPC.NOTIFY_SEND, (_event, token: string, payload: { title: string; body?: string }) => {
+    if (!token || !sessions.has(token)) throw new Error('Unauthorized');
     try {
       if (Notification.isSupported()) {
         const iconPath = getNotificationIcon();

@@ -4,65 +4,70 @@ import { TABLES } from './schema';
 export function runMigrations(db: Database.Database) {
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (
     id INTEGER PRIMARY KEY,
-    version INTEGER NOT NULL,
+    version INTEGER NOT NULL UNIQUE,
     applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   const row = db.prepare('SELECT MAX(version) as version FROM _migrations').get() as { version: number | null };
   const currentVersion = row?.version || 0;
 
-  // Version 1: Base table definitions
+  const columnExists = (tableName: string, columnName: string): boolean => {
+    try {
+      const cols = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+      return cols.some(c => c.name.toLowerCase() === columnName.toLowerCase());
+    } catch {
+      return false;
+    }
+  };
+
+  // Version 1: Base table definitions (Transactional)
   if (currentVersion < 1) {
-    for (const tableSql of TABLES) {
-      try {
+    const v1Tx = db.transaction(() => {
+      for (const tableSql of TABLES) {
         db.exec(tableSql);
-      } catch (e) {
-        console.error('Error applying base schema:', e);
       }
-    }
-    db.prepare('INSERT INTO _migrations (version) VALUES (1)').run();
+      db.prepare('INSERT INTO _migrations (version) VALUES (1)').run();
+    });
+    v1Tx();
   }
 
-  // Version 2: Safe additive domain extensions
+  // Version 2: Additive domain extensions (Transactional)
   if (currentVersion < 2) {
-    const additiveCols = [
-      'ALTER TABLE products ADD COLUMN icon TEXT',
-      `CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-      'ALTER TABLE interfaces ADD COLUMN service_provider TEXT',
-      'ALTER TABLE interfaces ADD COLUMN target_audience TEXT',
-      "ALTER TABLE interfaces ADD COLUMN direction TEXT DEFAULT 'Provided'",
-      'ALTER TABLE interfaces ADD COLUMN connection_details TEXT',
-      'ALTER TABLE documents_meta ADD COLUMN file_name TEXT',
-      'ALTER TABLE documents_meta ADD COLUMN file_data TEXT',
-      "ALTER TABLE documents_meta ADD COLUMN sharepoint_status TEXT DEFAULT 'Pending'",
-      'ALTER TABLE documents_meta ADD COLUMN linked_entity_type TEXT',
-      'ALTER TABLE documents_meta ADD COLUMN linked_entity_id TEXT',
-      'ALTER TABLE documents_meta ADD COLUMN linked_entity_name TEXT',
-      'ALTER TABLE schedule_events ADD COLUMN duration_days INTEGER DEFAULT 1',
-      'ALTER TABLE schedule_events ADD COLUMN notify_days_before INTEGER DEFAULT 1',
-      'ALTER TABLE hr_records ADD COLUMN phone TEXT',
-      'ALTER TABLE hr_records ADD COLUMN work_location TEXT',
-      'ALTER TABLE hr_records ADD COLUMN notes TEXT',
-      'ALTER TABLE uat_cases ADD COLUMN attachment_name TEXT',
-      'ALTER TABLE uat_cases ADD COLUMN attachment_data TEXT',
-      'ALTER TABLE uat_cases ADD COLUMN attachment_size INTEGER',
-      'ALTER TABLE apis ADD COLUMN given_to TEXT',
-      'ALTER TABLE apis ADD COLUMN auth_mechanism TEXT',
-      'ALTER TABLE apis ADD COLUMN is_mocked INTEGER DEFAULT 0',
-      "ALTER TABLE apis ADD COLUMN status TEXT DEFAULT 'Active'",
-      'ALTER TABLE secrets_meta ADD COLUMN encrypted_value TEXT'
-    ];
-
-    for (const stmt of additiveCols) {
-      try { db.exec(stmt); } catch (_) {}
-    }
-    db.prepare('INSERT INTO _migrations (version) VALUES (2)').run();
+    const v2Tx = db.transaction(() => {
+      if (!columnExists('products', 'icon')) db.exec('ALTER TABLE products ADD COLUMN icon TEXT');
+      db.exec(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+      if (!columnExists('interfaces', 'service_provider')) db.exec('ALTER TABLE interfaces ADD COLUMN service_provider TEXT');
+      if (!columnExists('interfaces', 'target_audience')) db.exec('ALTER TABLE interfaces ADD COLUMN target_audience TEXT');
+      if (!columnExists('interfaces', 'direction')) db.exec("ALTER TABLE interfaces ADD COLUMN direction TEXT DEFAULT 'Provided'");
+      if (!columnExists('interfaces', 'connection_details')) db.exec('ALTER TABLE interfaces ADD COLUMN connection_details TEXT');
+      if (!columnExists('documents_meta', 'file_name')) db.exec('ALTER TABLE documents_meta ADD COLUMN file_name TEXT');
+      if (!columnExists('documents_meta', 'file_data')) db.exec('ALTER TABLE documents_meta ADD COLUMN file_data TEXT');
+      if (!columnExists('documents_meta', 'sharepoint_status')) db.exec("ALTER TABLE documents_meta ADD COLUMN sharepoint_status TEXT DEFAULT 'Pending'");
+      if (!columnExists('documents_meta', 'linked_entity_type')) db.exec('ALTER TABLE documents_meta ADD COLUMN linked_entity_type TEXT');
+      if (!columnExists('documents_meta', 'linked_entity_id')) db.exec('ALTER TABLE documents_meta ADD COLUMN linked_entity_id TEXT');
+      if (!columnExists('documents_meta', 'linked_entity_name')) db.exec('ALTER TABLE documents_meta ADD COLUMN linked_entity_name TEXT');
+      if (!columnExists('schedule_events', 'duration_days')) db.exec('ALTER TABLE schedule_events ADD COLUMN duration_days INTEGER DEFAULT 1');
+      if (!columnExists('schedule_events', 'notify_days_before')) db.exec('ALTER TABLE schedule_events ADD COLUMN notify_days_before INTEGER DEFAULT 1');
+      if (!columnExists('hr_records', 'phone')) db.exec('ALTER TABLE hr_records ADD COLUMN phone TEXT');
+      if (!columnExists('hr_records', 'work_location')) db.exec('ALTER TABLE hr_records ADD COLUMN work_location TEXT');
+      if (!columnExists('hr_records', 'notes')) db.exec('ALTER TABLE hr_records ADD COLUMN notes TEXT');
+      if (!columnExists('uat_cases', 'attachment_name')) db.exec('ALTER TABLE uat_cases ADD COLUMN attachment_name TEXT');
+      if (!columnExists('uat_cases', 'attachment_data')) db.exec('ALTER TABLE uat_cases ADD COLUMN attachment_data TEXT');
+      if (!columnExists('uat_cases', 'attachment_size')) db.exec('ALTER TABLE uat_cases ADD COLUMN attachment_size INTEGER');
+      if (!columnExists('apis', 'given_to')) db.exec('ALTER TABLE apis ADD COLUMN given_to TEXT');
+      if (!columnExists('apis', 'auth_mechanism')) db.exec('ALTER TABLE apis ADD COLUMN auth_mechanism TEXT');
+      if (!columnExists('apis', 'is_mocked')) db.exec('ALTER TABLE apis ADD COLUMN is_mocked INTEGER DEFAULT 0');
+      if (!columnExists('apis', 'status')) db.exec("ALTER TABLE apis ADD COLUMN status TEXT DEFAULT 'Active'");
+      if (!columnExists('secrets_meta', 'encrypted_value')) db.exec('ALTER TABLE secrets_meta ADD COLUMN encrypted_value TEXT');
+      db.prepare('INSERT INTO _migrations (version) VALUES (2)').run();
+    });
+    v2Tx();
   }
 
-  // Version 3: Integration Mapping Tables
+  // Version 3: Integration Mapping Tables (Transactional)
   if (currentVersion < 3) {
-    const integrationTables = [
-      `CREATE TABLE IF NOT EXISTS integration_maps (
+    const v3Tx = db.transaction(() => {
+      db.exec(`CREATE TABLE IF NOT EXISTS integration_maps (
         id TEXT PRIMARY KEY,
         product_id TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -70,8 +75,8 @@ export function runMigrations(db: Database.Database) {
         imported_at TEXT,
         created_by TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `CREATE TABLE IF NOT EXISTS integration_nodes (
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS integration_nodes (
         id TEXT PRIMARY KEY,
         map_id TEXT NOT NULL,
         node_key TEXT NOT NULL,
@@ -84,8 +89,8 @@ export function runMigrations(db: Database.Database) {
         notes TEXT,
         pos_x REAL DEFAULT 0,
         pos_y REAL DEFAULT 0
-      )`,
-      `CREATE TABLE IF NOT EXISTS integration_edges (
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS integration_edges (
         id TEXT PRIMARY KEY,
         map_id TEXT NOT NULL,
         edge_key TEXT NOT NULL,
@@ -98,20 +103,17 @@ export function runMigrations(db: Database.Database) {
         criticality TEXT,
         status TEXT,
         notes TEXT
-      )`,
-      `CREATE TABLE IF NOT EXISTS integration_groups (
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS integration_groups (
         id TEXT PRIMARY KEY,
         map_id TEXT NOT NULL,
         group_key TEXT NOT NULL,
         label TEXT NOT NULL,
         node_keys TEXT,
         color TEXT
-      )`
-    ];
-
-    for (const tbl of integrationTables) {
-      try { db.exec(tbl); } catch (_) {}
-    }
-    db.prepare('INSERT INTO _migrations (version) VALUES (3)').run();
+      )`);
+      db.prepare('INSERT INTO _migrations (version) VALUES (3)').run();
+    });
+    v3Tx();
   }
 }

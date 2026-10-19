@@ -444,7 +444,8 @@ export function registerSecretsHandlers(
   });
 
   // ── Dedicated Azure Key Vault Handlers ────────────────────────
-  ipcMain.handle(IPC.SECRETS_GET_AZURE_STATUS, () => {
+  ipcMain.handle(IPC.SECRETS_GET_AZURE_STATUS, (_event, token: string) => {
+    if (!token || !sessions.has(token)) throw new Error('Unauthorized');
     try {
       const row = db.prepare("SELECT status, connected_as, error FROM plugin_configs WHERE plugin_id = 'azure-keyvault'").get() as any;
       return {
