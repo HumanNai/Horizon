@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { IPC, SessionInfo, HorizonUser, LoginRequest } from '../../src/types';
 import { PluginHost } from '../plugins/plugin-host';
 import { pluginLogger } from '../plugins/logger';
+import { clearSecretKey } from './secrets';
 
 export const sessions = new Map<string, SessionInfo>();
 const SECRET_KEY = crypto.randomBytes(32);
@@ -106,6 +107,7 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
 
   ipcMain.handle(IPC.AUTH_LOGOUT, (event, token: string) => {
     sessions.delete(token);
+    clearSecretKey();
     return true;
   });
 
@@ -117,8 +119,13 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
     const session = sessions.get(token);
     if (!session) throw new Error('Unauthorized');
     
+    if (!newPassword || newPassword.length < 6) throw new Error('Password must be at least 6 characters');
     const hash = await bcrypt.hash(newPassword, 10);
     db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, session.user.id);
+    for (const [t, s] of sessions.entries()) {
+      if (s.user.id === session.user.id && t !== token) sessions.delete(t);
+    }
+    clearSecretKey();
 
     // Push change to MongoDB and mutations
     const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user.id) as any;
@@ -134,7 +141,9 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
 
   ipcMain.handle(IPC.AUTH_LIST_USERS, (event, token: string) => {
     const session = sessions.get(token);
-    if (!session) throw new Error('Unauthorized');
+    if (!session || (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin')) {
+      throw new Error('Unauthorized: Product Owner or Super Admin access required');
+    }
     const rows = db.prepare(`
       SELECT id, username, display_name as displayName, role, active, email, avatar_initials as avatarInitials, sp_item_id as spItemId, created_at as createdAt, updated_at as updatedAt 
       FROM users ORDER BY role DESC, display_name ASC
@@ -146,6 +155,12 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
     const session = sessions.get(token);
     if (!session || (session.user.role !== 'ProductOwner' && session.user.role !== 'SuperAdmin')) throw new Error('Unauthorized: Product Owner or Super Admin access required');
 
+    const ALLOWED_ROLES = ['SuperAdmin', 'ProductOwner', 'Management', 'ProductLead', 'TeamMember'];
+    const safeRole = ALLOWED_ROLES.includes(data.role) ? data.role : 'TeamMember';
+    if (safeRole === 'SuperAdmin' && session.user.role !== 'SuperAdmin') {
+      throw new Error('Only SuperAdmin can provision other SuperAdmin accounts');
+    }
+
     const id = crypto.randomUUID();
     const hash = await bcrypt.hash(data.password || 'horizon123', 10);
     const rawName = (data.displayName || data.username).trim();
@@ -155,7 +170,7 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
     db.prepare(`
       INSERT INTO users (id, username, password_hash, display_name, role, active, email, avatar_initials, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).run(id, data.username.trim(), hash, data.displayName.trim(), data.role || 'TeamMember', data.active !== false ? 1 : 0, data.email || null, initials);
+    `).run(id, data.username.trim(), hash, data.displayName.trim(), safeRole, data.active !== false ? 1 : 0, data.email || null, initials);
 
     const createdRecord = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
 
@@ -182,8 +197,15 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database, pl
       passwordHash = await bcrypt.hash(updates.password.trim(), 10);
     }
 
+    const ALLOWED_ROLES = ['SuperAdmin', 'ProductOwner', 'Management', 'ProductLead', 'TeamMember'];
+    let safeRole = existing.role;
+    if (updates.role !== undefined) {
+      if (!ALLOWED_ROLES.includes(updates.role)) throw new Error('Invalid role specified');
+      if (updates.role === 'SuperAdmin' && session.user.role !== 'SuperAdmin') throw new Error('Only SuperAdmin can grant SuperAdmin role');
+      safeRole = updates.role;
+    }
     const displayName = updates.displayName !== undefined ? updates.displayName.trim() : existing.display_name;
-    const role = updates.role !== undefined ? updates.role : existing.role;
+    const role = safeRole;
     const active = updates.active !== undefined ? (updates.active ? 1 : 0) : existing.active;
     const email = updates.email !== undefined ? updates.email : existing.email;
 

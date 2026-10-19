@@ -5,6 +5,9 @@ import { IPC, SecretMeta } from '../../src/types';
 import { sessions } from './auth';
 
 let secretKey: Buffer | null = null;
+export function clearSecretKey() {
+  secretKey = null;
+}
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -360,7 +363,8 @@ export function registerSecretsHandlers(
 
     // Prefer SP copy (always up-to-date) when available
     if (!encrypted && graphConnector && meta.sp_item_id) {
-      const spItems = await graphConnector.queryList('Secrets', `Title eq '${id}'`);
+      const safeId = String(id).replace(/'/g, "''");
+      const spItems = await graphConnector.queryList('Secrets', `Title eq '${safeId}'`);
       encrypted = spItems?.[0]?.EncryptedValue;
     }
     if (!encrypted) throw new Error('No encrypted data found for this secret');

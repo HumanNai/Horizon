@@ -21,6 +21,7 @@ import { MongoDBConnector } from './mongodb/connector';
 import { AzureKeyVaultConnector } from './azure-keyvault/connector';
 import { AzureADConnector } from './azure-ad/connector';
 import { pluginLogger } from './logger';
+import { sessions } from '../ipc/auth';
 
 export class PluginHost {
   private db: Database.Database;
@@ -569,7 +570,8 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
     }
   });
 
-  ipcMain.handle(IPC.PLUGIN_DISCONNECT, async (_event, pluginId: string) => {
+  ipcMain.handle(IPC.PLUGIN_DISCONNECT, async (_event, token: string, pluginId: string) => {
+    requireAdmin(token);
     if (pluginId === 'mongodb-core') {
       try {
         const connector = pluginHost.getMongoConnector();
@@ -615,7 +617,8 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
     return pluginLogger.getLogs();
   });
 
-  ipcMain.handle(IPC.PLUGIN_DELETE_CLOUD_RECORD, async (_event, entity: string, recordId: string) => {
+  ipcMain.handle(IPC.PLUGIN_DELETE_CLOUD_RECORD, async (_event, token: string, entity: string, recordId: string) => {
+    requireAdmin(token);
     try {
       const activeId = pluginHost.getActiveBackendId();
       if (activeId === 'mongodb-core') {
@@ -634,7 +637,8 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
     }
   });
 
-  ipcMain.handle(IPC.PLUGIN_GET_APP_SETTING, (_event, key: string) => {
+  ipcMain.handle(IPC.PLUGIN_GET_APP_SETTING, (_event, token: string, key: string) => {
+    requireAuth(token);
     try {
       const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as any;
       return row ? row.value : null;
@@ -643,7 +647,8 @@ export function registerPluginHandlers(ipcMain: IpcMain, db: Database.Database, 
     }
   });
 
-  ipcMain.handle(IPC.PLUGIN_SET_APP_SETTING, (_event, key: string, value: string) => {
+  ipcMain.handle(IPC.PLUGIN_SET_APP_SETTING, (_event, token: string, key: string, value: string) => {
+    requireAdmin(token);
     try {
       db.prepare(`
         INSERT INTO app_settings (key, value, updated_at)
