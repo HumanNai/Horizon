@@ -15,16 +15,61 @@ import { SessionInfo, HorizonUser, UserRole } from '../src/types';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || process.env.CORS_ORIGIN || '';
-app.use(cors({
-  origin: (origin, callback) => {
-    // Non-browser / same-origin requests (curl, server-to-server) have no Origin header
-    if (!origin) return callback(null, true);
-    if (process.env.NODE_ENV !== 'production') return callback(null, true);
-    if (ALLOWED_ORIGIN && origin === ALLOWED_ORIGIN) return callback(null, true);
-    callback(new Error(`CORS blocked: origin ${origin} is not permitted`));
-  },
-  credentials: true
+// Trust first proxy hop (reverse proxy, Cloudflare tunnel, Docker bridge)
+app.set('trust proxy', 1);
+
+const rawAllowedOrigin = process.env.ALLOWED_ORIGIN || process.env.CORS_ORIGIN || '';
+const configuredOrigins = rawAllowedOrigin
+  ? rawAllowedOrigin.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
+
+app.use(cors((req: Request, callback) => {
+  const origin = req.headers.origin;
+
+  // 1. Same-origin navigations, server-to-server, curl, Docker healthchecks have no Origin header
+  if (!origin) {
+    return callback(null, { origin: true, credentials: true });
+  }
+
+  // 2. In non-production, permit all origins for development convenience
+  if (process.env.NODE_ENV !== 'production') {
+    return callback(null, { origin: true, credentials: true });
+  }
+
+  // 3. If explicit allowed origins are configured in environment, strictly enforce allowlist
+  if (configuredOrigins.length > 0) {
+    const isAllowed = configuredOrigins.some(allowed => {
+      if (allowed === origin || allowed === '*') return true;
+      try {
+        return new URL(allowed).origin === new URL(origin).origin;
+      } catch {
+        return false;
+      }
+    });
+    // Disallowed origin: deny CORS header without throwing an unhandled Express 500 error
+    return callback(null, { origin: isAllowed, credentials: true });
+  }
+
+  // 4. In production when ALLOWED_ORIGIN is not explicitly configured:
+  // Allow same-host requests (matching Host or X-Forwarded-Host) or local loopback
+  try {
+    const originUrl = new URL(origin);
+    const originHostname = originUrl.hostname;
+    const reqHost = (req.headers['x-forwarded-host'] as string) || req.headers.host;
+    if (reqHost) {
+      const primaryHost = reqHost.split(',')[0].trim();
+      const primaryHostname = primaryHost.split(':')[0];
+      if (originUrl.host === primaryHost || originHostname === primaryHostname) {
+        return callback(null, { origin: true, credentials: true });
+      }
+    }
+    if (originHostname === 'localhost' || originHostname === '127.0.0.1') {
+      return callback(null, { origin: true, credentials: true });
+    }
+  } catch {}
+
+  // Reject third-party cross-origin requests safely
+  return callback(null, { origin: false, credentials: true });
 }));
 app.use(express.json({ limit: process.env.MAX_REQUEST_SIZE || '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: process.env.MAX_REQUEST_SIZE || '50mb' }));
@@ -64,8 +109,20 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = process.env.DATABASE_PATH || path.join(dataDir, 'horizon.db');
-const db = new Database(dbPath);
+let dbPath = process.env.DATABASE_PATH || path.join(dataDir, 'horizon.db');
+let db: Database.Database;
+try {
+  db = new Database(dbPath);
+} catch (dbErr: any) {
+  console.error(`[CRITICAL] Could not open database at ${dbPath}: ${dbErr.message}`);
+  const fallbackDir = path.join(process.cwd(), '.horizon-data');
+  console.warn(`[WARN] Falling back to user-writable directory: ${fallbackDir}`);
+  if (!fs.existsSync(fallbackDir)) {
+    fs.mkdirSync(fallbackDir, { recursive: true });
+  }
+  dbPath = path.join(fallbackDir, 'horizon.db');
+  db = new Database(dbPath);
+}
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
 db.pragma('foreign_keys = ON');
@@ -1218,8 +1275,11 @@ app.get('/api/health', (req: Request, res: Response) => {
 // ── 6. Static Asset Serving for Hosted Web Mode ──────────────
 const clientDistCandidates = [
   path.join(process.cwd(), 'out', 'renderer'),
+  path.resolve(__dirname, '..', 'out', 'renderer'),
   path.join(process.cwd(), 'dist'),
-  path.join(process.cwd(), 'public')
+  path.resolve(__dirname, '..', 'dist'),
+  path.join(process.cwd(), 'public'),
+  path.resolve(__dirname, '..', 'public')
 ];
 const clientDist = clientDistCandidates.find(p => fs.existsSync(p)) || path.join(process.cwd(), 'public');
 
