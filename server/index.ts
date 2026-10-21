@@ -110,24 +110,38 @@ if (!fs.existsSync(dataDir)) {
 }
 
 let dbPath = process.env.DATABASE_PATH || path.join(dataDir, 'horizon.db');
-let db: Database.Database;
-try {
-  db = new Database(dbPath);
-} catch (dbErr: any) {
-  console.error(`[CRITICAL] Could not open database at ${dbPath}: ${dbErr.message}`);
-  const fallbackDir = path.join(process.cwd(), '.horizon-data');
-  console.warn(`[WARN] Falling back to user-writable directory: ${fallbackDir}`);
-  if (!fs.existsSync(fallbackDir)) {
-    fs.mkdirSync(fallbackDir, { recursive: true });
-  }
-  dbPath = path.join(fallbackDir, 'horizon.db');
-  db = new Database(dbPath);
-}
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
-db.pragma('foreign_keys = ON');
 
-runMigrations(db);
+function initDatabase(): Database.Database {
+  const tryOpenAndMigrate = (targetPath: string) => {
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const instance = new Database(targetPath);
+    instance.pragma('journal_mode = WAL');
+    instance.pragma('synchronous = NORMAL');
+    instance.pragma('foreign_keys = ON');
+    // Ensure database file and directory are writable before proceeding
+    instance.exec('CREATE TABLE IF NOT EXISTS _write_test (id INT PRIMARY KEY); DROP TABLE IF EXISTS _write_test;');
+    runMigrations(instance);
+    return instance;
+  };
+
+  try {
+    return tryOpenAndMigrate(dbPath);
+  } catch (dbErr: any) {
+    console.error(`[CRITICAL] Database at ${dbPath} is not writable or failed migrations: ${dbErr.message}`);
+    const fallbackDir = path.join(process.cwd(), '.horizon-data');
+    console.warn(`[WARN] Falling back to user-writable directory: ${fallbackDir}`);
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    dbPath = path.join(fallbackDir, 'horizon.db');
+    return tryOpenAndMigrate(dbPath);
+  }
+}
+
+const db = initDatabase();
 
 // ── Ensure Default SuperAdmin & ProductOwner exist ───────────
 function seedDefaultUsers() {
