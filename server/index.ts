@@ -10,7 +10,10 @@ import bcrypt from 'bcryptjs';
 import { runMigrations } from '../electron/db/migrations';
 import { PluginHost } from '../electron/plugins/plugin-host';
 import { pluginLogger } from '../electron/plugins/logger';
+import compression from 'compression';
 import { SessionInfo, HorizonUser, UserRole } from '../src/types';
+import { validateSafeQuery, validateSafeExecute, sanitizeRows } from '../src/utils/sqlSecurity';
+import { SP_ENTITY_LIST_MAP } from '../electron/plugins/sharepoint/connector';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -468,60 +471,7 @@ app.post('/api/auth/azure-ad/callback', async (req: Request, res: Response) => {
   }
 });
 
-// ── SQL Query & Execution Safety Helpers ─────────────────────
-function sanitizeSql(sql: string): string {
-  if (!sql || typeof sql !== 'string') throw new Error('Invalid SQL: Empty query string.');
-  let cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
-  cleaned = cleaned.replace(/--.*$/gm, ' ');
-  cleaned = cleaned.trim();
-  const statements = cleaned.split(';').map(s => s.trim()).filter(Boolean);
-  if (statements.length > 1) {
-    throw new Error('Access denied: Multiple SQL statements are not permitted.');
-  }
-  return statements[0] || '';
-}
 
-function validateSafeQuery(sql: string): string {
-  const cleaned = sanitizeSql(sql);
-  if (!/^(select|with)\b/i.test(cleaned)) {
-    throw new Error('Access denied: Only SELECT queries are permitted on this endpoint.');
-  }
-  if (/\b(drop|alter|truncate|attach|detach|pragma|vacuum|reindex)\b/i.test(cleaned)) {
-    throw new Error('Access denied: DDL and administrative commands are forbidden.');
-  }
-  if (/\b(_kv|_migrations)\b/i.test(cleaned)) {
-    throw new Error('Access denied: System key-value and migration tables are protected.');
-  }
-  if (/\bpassword_hash\b/i.test(cleaned) || /\bselect\s+\*\s+from\s+users\b/i.test(cleaned)) {
-    throw new Error('Access denied: Querying credential hashes directly is strictly prohibited.');
-  }
-  return cleaned;
-}
-
-function validateSafeExecute(sql: string): string {
-  const cleaned = sanitizeSql(sql);
-  if (!/^(insert|update|delete|replace)\b/i.test(cleaned)) {
-    throw new Error('Access denied: Only INSERT, UPDATE, or DELETE operations are permitted.');
-  }
-  if (/\b(drop|alter|truncate|attach|detach|pragma|vacuum|reindex|create)\b/i.test(cleaned)) {
-    throw new Error('Access denied: Schema alterations are restricted to migration scripts.');
-  }
-  if (/\b(users|_kv|_migrations|audit_log|plugin_configs)\b/i.test(cleaned)) {
-    throw new Error('Access denied: Direct mutation of security/audit/user tables is forbidden.');
-  }
-  return cleaned;
-}
-
-function sanitizeRows(rows: any[]): any[] {
-  if (!Array.isArray(rows)) return rows;
-  for (const row of rows) {
-    if (row && typeof row === 'object') {
-      delete row.password_hash;
-      delete row.password;
-    }
-  }
-  return rows;
-}
 
 // ── 3. Database Execution Routes ─────────────────────────────
 app.post('/api/db/query', authMiddleware, (req: Request, res: Response) => {
@@ -537,8 +487,9 @@ app.post('/api/db/query', authMiddleware, (req: Request, res: Response) => {
 
 app.post('/api/db/execute', authMiddleware, (req: Request, res: Response) => {
   try {
+    const session = (req as any).userSession;
     const { sql, params = [] } = req.body;
-    const safeSql = validateSafeExecute(sql, session.user.role);
+    const safeSql = validateSafeExecute(sql, session?.user?.role);
     const info = db.prepare(safeSql).run(...params);
     res.json({ changes: info.changes, lastInsertRowid: info.lastInsertRowid });
   } catch (err: any) {
@@ -751,7 +702,7 @@ app.post('/api/plugins/:id/config', authMiddleware, (req: Request, res: Response
   if (session.user.role !== 'SuperAdmin') {
     return res.status(403).json({ error: 'Super Admin authority required for plugin modifications' });
   }
-  pluginHost.saveConfig(req.params.id, req.body.settings);
+  pluginHost.saveConfig(req.params.id as string, req.body.settings);
   res.json({ success: true });
 });
 
@@ -761,7 +712,7 @@ app.post('/api/plugins/:id/connect', authMiddleware, async (req: Request, res: R
     return res.status(403).json({ error: 'Super Admin authority required' });
   }
 
-  const pluginId = req.params.id;
+  const pluginId = req.params.id as string;
   try {
     pluginHost.loadPlugin(pluginId);
     if (pluginId === 'azure-ad') {
@@ -1123,7 +1074,7 @@ app.get('/api/secrets/reveal/:id', authMiddleware, (req: Request, res: Response)
     if (!meta.encrypted_value) return res.status(500).json({ error: 'No encrypted data found for this secret' });
     const plaintext = vaultDecrypt(meta.encrypted_value, key);
     db.prepare('UPDATE secrets_meta SET last_accessed_at = CURRENT_TIMESTAMP, last_accessed_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(session.user.id, req.params.id);
-    logSecretAudit(session.user.id, 'SecretView', req.params.id);
+    logSecretAudit(session.user.id, 'SecretView', req.params.id as string);
     res.json(plaintext);
   } catch (err: any) {
     logServerError('/api/secrets/reveal', err, req);
@@ -1144,7 +1095,7 @@ app.post('/api/secrets/rotate/:id', authMiddleware, (req: Request, res: Response
     if (!newValue) return res.status(400).json({ error: 'newValue is required' });
     const encrypted = vaultEncrypt(newValue, key);
     db.prepare('UPDATE secrets_meta SET encrypted_value = ?, last_rotated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(encrypted, req.params.id);
-    logSecretAudit(session.user.id, 'SecretRotate', req.params.id);
+    logSecretAudit(session.user.id, 'SecretRotate', req.params.id as string);
     res.json(true);
   } catch (err: any) {
     logServerError('/api/secrets/rotate', err, req);
@@ -1159,7 +1110,7 @@ app.delete('/api/secrets/:id', authMiddleware, (req: Request, res: Response) => 
     const meta = db.prepare('SELECT id FROM secrets_meta WHERE id = ?').get(req.params.id) as any;
     if (!meta) return res.status(404).json({ error: 'Secret not found' });
     db.prepare('DELETE FROM secrets_meta WHERE id = ?').run(req.params.id);
-    logSecretAudit(session.user.id, 'SecretDelete', req.params.id);
+    logSecretAudit(session.user.id, 'SecretDelete', req.params.id as string);
     res.json(true);
   } catch (err: any) {
     logServerError('/api/secrets/delete', err, req);
@@ -1192,7 +1143,7 @@ app.get('/api/secrets/azure/reveal/:name', authMiddleware, async (req: Request, 
   try {
     const akv = pluginHost.getAzureKeyVaultConnector?.();
     if (!akv) return res.status(503).json({ error: 'Azure Key Vault is not connected' });
-    const plain = await akv.getSecretValue(req.params.name);
+    const plain = await akv.getSecretValue(req.params.name as string);
     logSecretAudit(session.user.id, 'SecretView', `azure:${req.params.name}`);
     res.json(plain);
   } catch (err: any) {
@@ -1297,7 +1248,18 @@ const clientDistCandidates = [
 ];
 const clientDist = clientDistCandidates.find(p => fs.existsSync(p)) || path.join(process.cwd(), 'public');
 
-app.use(express.static(clientDist));
+app.use('/assets', express.static(path.join(clientDist, 'assets'), {
+  maxAge: '1y',
+  immutable: true
+}));
+app.use(express.static(clientDist, {
+  maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 app.use('/templates', express.static(path.join(process.cwd(), 'public', 'templates')));
 
 // SPA Fallback for client-side routing

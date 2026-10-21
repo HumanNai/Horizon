@@ -59,7 +59,7 @@ export function AppShell() {
 
   const fetchNotifications = async () => {
     try {
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       const prodSubquery = isPO
         ? 'SELECT id FROM products'
         : 'SELECT id FROM products WHERE owner_id = ? OR owner_id = ? OR owner_id = ?'
@@ -235,7 +235,7 @@ export function AppShell() {
   }, [])
 
   const isSuperAdmin = user?.role === 'SuperAdmin'
-  const isPO = user?.role === 'ProductOwner'
+  const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
   const isLead = user?.role === 'ProductLead'
   const isExec = user?.role === 'Management'
 

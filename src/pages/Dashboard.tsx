@@ -51,7 +51,7 @@ interface BlockedTask {
 export function Dashboard() {
   const navigate = useNavigate()
   const currentUser = useAuthStore(state => state.user)
-  const isPO = currentUser?.role === 'ProductOwner'
+  const isPO = !currentUser || currentUser.role === 'SuperAdmin' || currentUser.role === 'ProductOwner' || currentUser.role === 'Management'
   const isManagement = currentUser?.role === 'Management'
 
   const [viewMode, setViewMode] = useState<'standard' | 'executive'>(() => {
@@ -88,7 +88,7 @@ export function Dashboard() {
       setLoading(true)
       try {
         const user = useAuthStore.getState().user || currentUser
-        const isPO = user?.role === 'ProductOwner'
+        const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
         const isManagement = user?.role === 'Management'
         const isExecutive = isPO || isManagement
 

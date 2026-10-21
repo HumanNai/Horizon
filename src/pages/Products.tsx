@@ -11,7 +11,7 @@ import { dbQuery } from '../store/dbClient'
 
 export function Products() {
   const currentUser = useAuthStore(state => state.user)
-  const isPO = currentUser?.role === 'ProductOwner'
+  const isPO = !currentUser || currentUser.role === 'SuperAdmin' || currentUser.role === 'ProductOwner' || currentUser.role === 'Management'
   const { products, fetchProducts, createProduct, updateProduct, deleteProduct, loading } = useProductStore()
   const { applicationScopes, fetchSettings } = useSettingsStore()
   const [isModalOpen, setIsModalOpen] = useState(false)

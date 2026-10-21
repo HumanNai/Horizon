@@ -22,7 +22,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const user = useAuthStore.getState().user
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       let rows: any[] = []
       if (!user || isPO) {
         rows = await dbQuery<any>('SELECT * FROM products ORDER BY name ASC')
@@ -53,7 +53,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
   createProduct: async (data) => {
     try {
       const user = useAuthStore.getState().user
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       const id = data.id || `prod-${Date.now()}`
       const name = data.name || 'Untitled Product'
       const type = data.type || 'Other'
@@ -99,7 +99,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
   updateProduct: async (id, data) => {
     try {
       const user = useAuthStore.getState().user
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       const current = get().products.find(p => p.id === id)
       if (!current) return
 
@@ -145,7 +145,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
   deleteProduct: async (id) => {
     try {
       const user = useAuthStore.getState().user
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       const target = get().products.find(p => p.id === id)
       if (!target) return
 

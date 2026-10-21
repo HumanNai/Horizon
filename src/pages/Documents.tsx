@@ -61,7 +61,7 @@ export function Documents() {
   const loadDocs = async () => {
     try {
       const user = useAuthStore.getState().user || currentUser
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       const prodSubquery = isPO
         ? 'SELECT id FROM products'
         : 'SELECT id FROM products WHERE owner_id = ? OR owner_id = ? OR owner_id = ?'

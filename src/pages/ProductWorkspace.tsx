@@ -84,7 +84,7 @@ export function ProductWorkspace() {
   const { productId } = useParams<{ productId: string }>()
   const navigate = useNavigate()
   const currentUser = useAuthStore(state => state.user)
-  const isPO = currentUser?.role === 'ProductOwner'
+  const isPO = !currentUser || currentUser.role === 'SuperAdmin' || currentUser.role === 'ProductOwner' || currentUser.role === 'Management'
   const isManagement = currentUser?.role === 'Management'
   const isTeamMember = currentUser?.role === 'TeamMember'
   const isProductLead = currentUser?.role === 'ProductLead'
@@ -350,7 +350,7 @@ export function ProductWorkspace() {
         return
       }
       const p = prods[0]
-      const isPO = currentUser?.role === 'ProductOwner'
+      const isPO = !currentUser || currentUser.role === 'SuperAdmin' || currentUser.role === 'ProductOwner' || currentUser.role === 'Management'
       const isLead = currentUser?.role === 'ProductLead'
       const isExec = currentUser?.role === 'Management'
       const isOwner = Boolean(currentUser && (
@@ -1744,7 +1744,7 @@ export function ProductWorkspace() {
   // --- Edit Product ---
   const handleUpdateProduct = async () => {
     if (!editName.trim() || !productId) return
-    const isPO = currentUser?.role === 'ProductOwner'
+    const isPO = !currentUser || currentUser.role === 'SuperAdmin' || currentUser.role === 'ProductOwner' || currentUser.role === 'Management'
     const finalOwner = isPO ? (editOwner.trim() || product?.owner || 'Product Owner') : (product?.owner || currentUser?.displayName || 'Team Member')
     await dbExecute(
       'UPDATE products SET name = ?, type = ?, status = ?, owner_id = ?, description = ?, icon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',

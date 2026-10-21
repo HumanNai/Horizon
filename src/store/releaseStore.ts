@@ -24,7 +24,7 @@ export const useReleaseStore = create<ReleaseState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const user = useAuthStore.getState().user
-      const isPO = user?.role === 'ProductOwner'
+      const isPO = !user || user.role === 'SuperAdmin' || user.role === 'ProductOwner' || user.role === 'Management'
       let sql = ''
       let params: any[] = []
 
