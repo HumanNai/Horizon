@@ -38,11 +38,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package:win
 
-      - name: Archive Unpacked Distribution
+      - name: Archive Unpacked Distribution & Portable Executable
         shell: pwsh
         run: |
           $ver = node -p "require('./package.json').version"
           Compress-Archive -Path "release\win-unpacked\*" -DestinationPath "release\Horizon-$ver-win-unpacked.zip" -Force
+          Compress-Archive -Path "release\Horizon-$ver-portable.exe" -DestinationPath "release\Horizon-$ver-portable.zip" -Force
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4

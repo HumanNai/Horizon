@@ -259,6 +259,7 @@ npm run package:win
 Packaged outputs will be generated in `release/`:
 * `Horizon-Setup-1.2.0.exe` (NSIS Installer)
 * `Horizon-1.2.0-portable.exe` (Standalone Portable Executable)
+* `Horizon-1.2.0-portable.zip` (Zipped Standalone Portable Executable)
 * `Horizon-1.2.0-win-unpacked.zip` (Complete Unpacked Application Archive)
 
 ### macOS Packaging
