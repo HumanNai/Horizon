@@ -47,8 +47,10 @@ import {
   Filter,
   RotateCcw,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet
 } from 'lucide-react'
+import { exportProductWorkspaceToExcel } from '../utils/excelExport'
 import { Card, Button, Badge, Modal, Input, Select } from '../components/ui'
 import { PipelineBar } from '../components/PipelineBar'
 import { KanbanBoard } from '../components/KanbanBoard'
@@ -590,7 +592,7 @@ export function ProductWorkspace() {
     setRelName('')
     setRelDescription('')
     setRelFeatures([])
-    await loadWorkspaceData()
+
   }
 
   const handleOpenEditRelease = (r: Release) => {
@@ -635,7 +637,7 @@ export function ProductWorkspace() {
     }
 
     setIsEditReleaseOpen(false)
-    await loadWorkspaceData()
+
     if (selectedRelease?.id === editingRelease.id) {
       setSelectedRelease(prev => prev ? {
         ...prev,
@@ -656,14 +658,14 @@ export function ProductWorkspace() {
       try {
         await dbExecute('DELETE FROM schedule_events WHERE linked_id = ?', [id])
       } catch {}
-      await loadWorkspaceData()
+  
       if (selectedRelease?.id === id) setSelectedRelease(null)
     }
   }
 
   const handleUpdateReleaseStatus = async (id: string, newStatus: ReleaseStatus) => {
     await dbExecute('UPDATE releases SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newStatus, id])
-    await loadWorkspaceData()
+
     if (selectedRelease?.id === id) {
       setSelectedRelease(prev => prev ? { ...prev, status: newStatus } : null)
     }
@@ -778,7 +780,7 @@ export function ProductWorkspace() {
     setIsAddTaskOpen(false)
     setTaskTitle('')
     setTaskDesc('')
-    await loadWorkspaceData()
+
   }
 
   const handleOpenEditTask = (task: Task) => {
@@ -841,7 +843,7 @@ export function ProductWorkspace() {
 
     setIsEditTaskOpen(false)
     setEditingTask(null)
-    await loadWorkspaceData()
+
   }
 
   const handleDeleteTask = async (taskId: string) => {
@@ -852,7 +854,7 @@ export function ProductWorkspace() {
       } catch {}
       setIsEditTaskOpen(false)
       setEditingTask(null)
-      await loadWorkspaceData()
+  
     }
   }
 
@@ -935,7 +937,7 @@ export function ProductWorkspace() {
     }
 
     setIsAddInterfaceOpen(false)
-    await loadWorkspaceData()
+
   }
 
   const handleUpdateInterface = async () => {
@@ -976,7 +978,7 @@ export function ProductWorkspace() {
 
     setIsEditInterfaceOpen(false)
     setEditingInterface(null)
-    await loadWorkspaceData()
+
   }
 
   const handleDeleteInterface = async (id: string) => {
@@ -985,7 +987,7 @@ export function ProductWorkspace() {
       try {
         await (window as any).horizon?.plugins?.deleteCloudRecord?.('interfaces', id)
       } catch {}
-      await loadWorkspaceData()
+  
     }
   }
 
@@ -1068,7 +1070,7 @@ export function ProductWorkspace() {
     }
 
     setIsAddApiOpen(false)
-    await loadWorkspaceData()
+
   }
 
   const handleUpdateApi = async () => {
@@ -1111,7 +1113,7 @@ export function ProductWorkspace() {
 
     setIsEditApiOpen(false)
     setEditingApi(null)
-    await loadWorkspaceData()
+
   }
 
   const handleDeleteApi = async (id: string) => {
@@ -1120,7 +1122,7 @@ export function ProductWorkspace() {
       try {
         await (window as any).horizon?.plugins?.deleteCloudRecord?.('apis', id)
       } catch {}
-      await loadWorkspaceData()
+  
     }
   }
 
@@ -1199,7 +1201,7 @@ export function ProductWorkspace() {
     setDocFileName('')
     setDocFileData('')
     setDocFileSize(null)
-    await loadWorkspaceData()
+
   }
 
   const handleDownloadDoc = (doc: any) => {
@@ -1223,7 +1225,7 @@ export function ProductWorkspace() {
       try {
         await (window as any).horizon?.plugins?.deleteCloudRecord?.('documents_meta', id)
       } catch {}
-      await loadWorkspaceData()
+  
     }
   }
 
@@ -1464,7 +1466,7 @@ export function ProductWorkspace() {
         setSchedAttachSize(null)
       }
 
-      await loadWorkspaceData()
+  
       setIsAddScheduleOpen(false)
       setSchedTitle('')
       setSchedStartDate('')
@@ -1480,7 +1482,7 @@ export function ProductWorkspace() {
     if (confirm(`Delete milestone "${title}"?`)) {
       try {
         await dbExecute('DELETE FROM schedule_events WHERE id = ?', [id])
-        await loadWorkspaceData()
+    
       } catch (err: any) {
         alert('Failed to delete milestone: ' + (err.message || err))
       }
@@ -1501,7 +1503,7 @@ export function ProductWorkspace() {
          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         [id, productId, selectedMemberUserId, memberRoleInApp || 'Developer']
       )
-      await loadWorkspaceData()
+  
       setIsAddTeamMemberOpen(false)
       setSelectedMemberUserId('')
       setMemberRoleInApp('Developer')
@@ -1514,7 +1516,7 @@ export function ProductWorkspace() {
     if (confirm(`Remove ${name} from this application?`)) {
       try {
         await dbExecute('DELETE FROM product_team_members WHERE id = ?', [membershipId])
-        await loadWorkspaceData()
+    
       } catch (err: any) {
         alert('Error removing member: ' + (err.message || err))
       }
@@ -1577,7 +1579,7 @@ export function ProductWorkspace() {
     }
 
     setIsAddUatOpen(false)
-    await loadWorkspaceData()
+
   }
 
   const handleOpenEditUat = (tc: UATCase) => {
@@ -1646,7 +1648,7 @@ export function ProductWorkspace() {
 
     setIsEditUatOpen(false)
     setEditingUatCase(null)
-    await loadWorkspaceData()
+
   }
 
   const handleDownloadUatAttachment = (name?: string, data?: string) => {
@@ -1712,7 +1714,7 @@ export function ProductWorkspace() {
       }
 
       setIsSignOffOpen(false)
-      await loadWorkspaceData()
+  
     } catch (err: any) {
       console.error('Error recording QA sign-off:', err)
       alert('Failed to complete QA sign-off: ' + (err.message || err))
@@ -1725,7 +1727,7 @@ export function ProductWorkspace() {
         setIsEditUatOpen(false)
         setEditingUatCase(null)
         await dbExecute('DELETE FROM uat_cases WHERE id = ?', [id])
-        await loadWorkspaceData()
+    
       } catch (err: any) {
         alert('Failed to delete test scenario: ' + (err.message || err))
       }
@@ -1751,7 +1753,47 @@ export function ProductWorkspace() {
       [editName.trim(), editType, editStatus, finalOwner, editDesc.trim(), editIcon, productId]
     )
     setIsEditProductOpen(false)
-    await loadWorkspaceData()
+
+  }
+
+  const handleExportProductReport = () => {
+    if (!product) return
+    try {
+      exportProductWorkspaceToExcel(product, {
+        releases,
+        tasks,
+        uatCases,
+        interfaces,
+        apis,
+        teamMembers,
+        currentUser
+      })
+    } catch (err: any) {
+      console.error('Failed to export product report to Excel:', err)
+      alert('Failed to export product report to Excel.')
+    }
+  }
+
+  const handleExportProductReport = () => {
+    if (!product) return
+    try {
+      exportProductWorkspaceToExcel(product, {
+        releases,
+        tasks,
+        uatCases,
+        interfaces,
+        apis,
+        teamMembers,
+        currentUser
+      })
+    } catch (err: any) {
+      console.error('Failed to export product report to Excel:', err)
+      alert('Failed to export product report to Excel.')
+    }
+  }
+
+
+
   }
 
   if (isAccessDenied) {
@@ -2011,21 +2053,34 @@ export function ProductWorkspace() {
             <span className="text-gray-300 font-medium truncate max-w-[120px]">{product.owner || 'Product Owner'}</span>
           </div>
 
-          {isManagement ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
-              <ShieldAlert size={14} className="text-amber-400 shrink-0" />
-              <span>Executive Read-Only Oversight</span>
-            </div>
-          ) : (
-            <Button 
-              size="sm" 
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
               variant="secondary"
-              onClick={() => setIsEditProductOpen(true)}
-              className="gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs"
+              onClick={handleExportProductReport}
+              className="gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium border-[#1E2D52] hover:bg-[#131D3B] text-gray-200"
+              title="Download comprehensive product details as an Excel spreadsheet (.xlsx)"
             >
-              <Edit3 size={13} /> Configure
+              <FileSpreadsheet size={13} className="text-emerald-400" />
+              <span className="hidden sm:inline">Export Excel (.xlsx)</span>
             </Button>
-          )}
+
+            {isManagement ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                <ShieldAlert size={14} className="text-amber-400 shrink-0" />
+                <span>Executive Read-Only Oversight</span>
+              </div>
+            ) : (
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={() => setIsEditProductOpen(true)}
+                className="gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs"
+              >
+                <Edit3 size={13} /> Configure
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -86,6 +86,11 @@ Horizon provides pluggable, unified cloud synchronization with automatic delta-t
 * **Team Member (TeamMember)**: Day-to-day task execution, specification reviews, and test case runs.
 * **Microsoft Entra ID (Azure AD) Single Sign-On**: Full confidential client integration with automated security group-to-role mappings (`groupSuperAdmin`, `groupProductOwner`, `groupProductLead`, `groupManagement`).
 
+### 10. Multi-Sheet Excel Reports & Data Export
+* **Portfolio-Wide Export**: Export entire product portfolio into structured multi-sheet .xlsx workbooks containing Product Portfolio metadata, Executive KPIs & quality metrics, active Releases Roadmap, and Tasks Backlog.
+* **Granular Product Workspace Export**: 1-click comprehensive export of any product workspace featuring 7 distinct sheets: Product Overview, Roadmap & Releases, Sprint Tasks, Quality Gate (UAT), Integration Interfaces, API Catalog, and Team Members.
+* **Executive Ready**: Auto-fitted column dimensions, structured headers, and clean summary metrics formatted for leadership reviews, regulatory audits, and offline spreadsheet analysis.
+
 ---
 
 ## 🏗️ Architecture
@@ -252,9 +257,9 @@ To compile and package self-contained, production-ready installers and portable 
 npm run package:win
 ```
 Packaged outputs will be generated in `release/`:
-* `Horizon-Setup-1.1.0.exe` (NSIS Installer)
-* `Horizon-1.1.0-portable.exe` (Standalone Portable Executable)
-* `Horizon-1.1.0-win-unpacked.zip` (Complete Unpacked Application Archive)
+* `Horizon-Setup-1.2.0.exe` (NSIS Installer)
+* `Horizon-1.2.0-portable.exe` (Standalone Portable Executable)
+* `Horizon-1.2.0-win-unpacked.zip` (Complete Unpacked Application Archive)
 
 ### macOS Packaging
 *Note: macOS packaging uses native Darwin toolchains and is built on macOS or automatically via our GitHub Actions workflow (`.github/workflows/package.yml`).*
@@ -263,9 +268,9 @@ Packaged outputs will be generated in `release/`:
 npm run package:mac
 ```
 Packaged outputs will be generated in `release/`:
-* `Horizon-1.1.0-mac-arm64.dmg` (Apple Silicon DMG Installer)
-* `Horizon-1.1.0-mac-x64.dmg` (Intel Mac DMG Installer)
-* `Horizon-1.1.0-mac-arm64.zip` & `Horizon-1.1.0-mac-x64.zip` (Direct Application Archives)
+* `Horizon-1.2.0-mac-arm64.dmg` (Apple Silicon DMG Installer)
+* `Horizon-1.2.0-mac-x64.dmg` (Intel Mac DMG Installer)
+* `Horizon-1.2.0-mac-arm64.zip` & `Horizon-1.2.0-mac-x64.zip` (Direct Application Archives)
 
 ---
 
@@ -288,7 +293,7 @@ Open your Mac **Terminal** (press `Cmd + Space`, type `Terminal`, and press `Ent
 > *This automatically detects Apple Silicon or Intel, downloads the latest release, installs Horizon to `/Applications`, clears the quarantine attribute, and launches Horizon cleanly.*
 
 #### Option B: Via System Settings (GUI Method)
-1. Double-click `Horizon-1.1.0-mac-arm64.dmg` (or Intel `x64.dmg`) and drag **Horizon** to **Applications**.
+1. Double-click `Horizon-1.2.0-mac-arm64.dmg` (or Intel `x64.dmg`) and drag **Horizon** to **Applications**.
 2. Try opening **Horizon** from Applications. If Gatekeeper displays a prompt, click **Cancel** (or if moved to trash, open Trash, right-click `Horizon.app`, and choose **Put Back**).
 3. Open **System Settings** on your Mac.
 4. Navigate to **Privacy & Security** and scroll down to the **Security** section.
@@ -307,7 +312,7 @@ xattr -cr /Applications/Horizon.app
 
 ### 🪟 Windows (Windows 10 / 11)
 
-When running `Horizon-Setup-1.1.0.exe` or `Horizon-1.1.0-portable.exe`:
+When running `Horizon-Setup-1.2.0.exe` or `Horizon-1.2.0-portable.exe`:
 1. If Microsoft Defender SmartScreen displays: *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting"*:
 2. Click **More info**.
 3. Click the **Run anyway** button that appears.

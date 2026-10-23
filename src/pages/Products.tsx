@@ -3,7 +3,8 @@ import { useProductStore } from '../store/productStore'
 import { useAuthStore } from '../store/authStore'
 import { Card, Button, Badge, Modal, Input, Select } from '../components/ui'
 import { Product, ProductType, ProductStatus } from '../types'
-import { Plus, Search, Layers, ExternalLink, Trash2, Edit3, Sparkles, User, ShieldCheck, ChevronDown } from 'lucide-react'
+import { Plus, Search, Layers, ExternalLink, Trash2, Edit3, Sparkles, User, ShieldCheck, ChevronDown, FileSpreadsheet } from 'lucide-react'
+import { exportAllProductsToExcel } from '../utils/excelExport'
 import { useNavigate } from 'react-router-dom'
 import { IconPicker, isImageIcon } from '../components/IconPicker'
 import { useSettingsStore } from '../store/settingsStore'
@@ -20,6 +21,7 @@ export function Products() {
   const [filterType, setFilterType] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [usersList, setUsersList] = useState<{ id: string; name: string }[]>([])
+  const [isExporting, setIsExporting] = useState(false)
   const navigate = useNavigate()
   
   // Form state
@@ -79,6 +81,18 @@ export function Products() {
     }
   }
 
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true)
+      await exportAllProductsToExcel(filtered, { currentUser })
+    } catch (err: any) {
+      console.error('Failed to export product portfolio to Excel:', err)
+      alert('Failed to export product portfolio to Excel.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const filtered = products.filter(p => {
     if (!isPO && currentUser) {
       const isOwner = p.owner === currentUser.displayName || p.owner === currentUser.username || p.owner === currentUser.id
@@ -103,9 +117,21 @@ export function Products() {
             Manage enterprise portfolio applications (Internal & External) and track linked releases.
           </p>
         </div>
-        <Button onClick={() => handleOpenModal()} className="shadow-lg shadow-[#2E5EFF]/25 gap-2">
-          <Plus size={16} /> Add Product
-        </Button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button 
+            onClick={handleExportExcel} 
+            variant="secondary"
+            disabled={isExporting || filtered.length === 0}
+            className="gap-2 border-[#19264A] hover:bg-[#162244] text-xs font-semibold text-gray-200"
+            title="Download overall product portfolio details as an Excel spreadsheet (.xlsx)"
+          >
+            <FileSpreadsheet size={15} className="text-emerald-400" />
+            {isExporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+          </Button>
+          <Button onClick={() => handleOpenModal()} className="shadow-lg shadow-[#2E5EFF]/25 gap-2 text-xs">
+            <Plus size={16} /> Add Product
+          </Button>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}

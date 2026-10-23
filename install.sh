@@ -43,7 +43,7 @@ else
     exit 1
 fi
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 DMG_NAME="Horizon-${VERSION}-mac-${MAC_ARCH}.dmg"
 DOWNLOAD_URL="https://github.com/HumanNai/Horizon/releases/download/v${VERSION}/${DMG_NAME}"
 TMP_DIR=$(mktemp -d /tmp/horizon-install.XXXXXX)

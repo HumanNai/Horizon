@@ -1220,7 +1220,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     res.json({
       status: 'healthy',
       app: 'Horizon PM',
-      version: '1.1.0',
+      version: '1.2.0',
       uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
       database: {
