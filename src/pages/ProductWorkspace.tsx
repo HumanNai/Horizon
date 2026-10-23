@@ -1753,7 +1753,7 @@ export function ProductWorkspace() {
       [editName.trim(), editType, editStatus, finalOwner, editDesc.trim(), editIcon, productId]
     )
     setIsEditProductOpen(false)
-
+    await loadWorkspaceData()
   }
 
   const handleExportProductReport = () => {
@@ -1772,28 +1772,6 @@ export function ProductWorkspace() {
       console.error('Failed to export product report to Excel:', err)
       alert('Failed to export product report to Excel.')
     }
-  }
-
-  const handleExportProductReport = () => {
-    if (!product) return
-    try {
-      exportProductWorkspaceToExcel(product, {
-        releases,
-        tasks,
-        uatCases,
-        interfaces,
-        apis,
-        teamMembers,
-        currentUser
-      })
-    } catch (err: any) {
-      console.error('Failed to export product report to Excel:', err)
-      alert('Failed to export product report to Excel.')
-    }
-  }
-
-
-
   }
 
   if (isAccessDenied) {
