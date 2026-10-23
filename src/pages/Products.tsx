@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { Card, Button, Badge, Modal, Input, Select } from '../components/ui'
 import { Product, ProductType, ProductStatus } from '../types'
 import { Plus, Search, Layers, ExternalLink, Trash2, Edit3, Sparkles, User, ShieldCheck, ChevronDown, FileSpreadsheet } from 'lucide-react'
-import { exportAllProductsToExcel } from '../utils/excelExport'
+import { exportAllProductsToExcel, canExportExcel } from '../utils/excelExport'
 import { useNavigate } from 'react-router-dom'
 import { IconPicker, isImageIcon } from '../components/IconPicker'
 import { useSettingsStore } from '../store/settingsStore'
@@ -82,12 +82,16 @@ export function Products() {
   }
 
   const handleExportExcel = async () => {
+    if (!canExportExcel(currentUser)) {
+      alert('Access Denied: Only Product Owners, Executives (Management), and Super Admins are authorized to export product portfolio data.')
+      return
+    }
     try {
       setIsExporting(true)
-      await exportAllProductsToExcel(filtered, { currentUser })
+      await exportAllProductsToExcel(filtered, { currentUser, queryFn: dbQuery })
     } catch (err: any) {
       console.error('Failed to export product portfolio to Excel:', err)
-      alert('Failed to export product portfolio to Excel.')
+      alert(err.message || 'Failed to export product portfolio to Excel.')
     } finally {
       setIsExporting(false)
     }
@@ -118,6 +122,7 @@ export function Products() {
           </p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
+          {canExportExcel(currentUser) && (
           <Button 
             onClick={handleExportExcel} 
             variant="secondary"
@@ -128,6 +133,7 @@ export function Products() {
             <FileSpreadsheet size={15} className="text-emerald-400" />
             {isExporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
           </Button>
+        )}
           <Button onClick={() => handleOpenModal()} className="shadow-lg shadow-[#2E5EFF]/25 gap-2 text-xs">
             <Plus size={16} /> Add Product
           </Button>

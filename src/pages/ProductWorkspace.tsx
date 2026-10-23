@@ -50,7 +50,7 @@ import {
   RefreshCw,
   FileSpreadsheet
 } from 'lucide-react'
-import { exportProductWorkspaceToExcel } from '../utils/excelExport'
+import { exportProductWorkspaceToExcel, canExportExcel } from '../utils/excelExport'
 import { Card, Button, Badge, Modal, Input, Select } from '../components/ui'
 import { PipelineBar } from '../components/PipelineBar'
 import { KanbanBoard } from '../components/KanbanBoard'
@@ -1758,6 +1758,10 @@ export function ProductWorkspace() {
 
   const handleExportProductReport = () => {
     if (!product) return
+    if (!canExportExcel(currentUser)) {
+      alert('Access Denied: Only Product Owners, Executives (Management), and Super Admins are authorized to export product reports.')
+      return
+    }
     try {
       exportProductWorkspaceToExcel(product, {
         releases,
@@ -1766,11 +1770,15 @@ export function ProductWorkspace() {
         interfaces,
         apis,
         teamMembers,
+        releaseSignoffs,
+        documents,
+        scheduleEvents,
+        customSections,
         currentUser
       })
     } catch (err: any) {
       console.error('Failed to export product report to Excel:', err)
-      alert('Failed to export product report to Excel.')
+      alert(err.message || 'Failed to export product report to Excel.')
     }
   }
 
@@ -2032,6 +2040,7 @@ export function ProductWorkspace() {
           </div>
 
           <div className="flex items-center gap-2">
+            {canExportExcel(currentUser) && (
             <Button
               size="sm"
               variant="secondary"
@@ -2042,6 +2051,7 @@ export function ProductWorkspace() {
               <FileSpreadsheet size={13} className="text-emerald-400" />
               <span className="hidden sm:inline">Export Excel (.xlsx)</span>
             </Button>
+          )}
 
             {isManagement ? (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
